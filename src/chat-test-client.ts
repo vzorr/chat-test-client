@@ -1,56 +1,47 @@
-// chat-test-client.ts - Production-ready test client for ChatService
-import readline from 'readline';
-import { EventEmitter } from 'events';
-import chalk from 'chalk';
+// chat-test-client.ts - Simple test client that uses ChatService
+import * as readline from 'readline';
+import * as dotenv from 'dotenv';
+import { v4 as uuidv4 } from 'uuid';
+
+// Load environment variables
+dotenv.config();
+
+// Import the ChatService (the main logic)
 import { chatService } from './services/chatService';
 import { 
-  Message, 
   MessageStatus, 
-  ConversationType,
-  ConversationStatus,
   ConnectionState,
-  MessageType
+  UserRegistrationData
 } from './types/chat';
 
-// Mock implementations for dependencies
-import './mocks/setup-mocks';
+// Import chalk for colors (handle both CommonJS and ES modules)
+const chalk = require('chalk');
 
-// Configuration
+// Configuration from environment variables
 const CONFIG = {
-  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjA5MWU0YzE3LTQ3YWItNDE1MC04YjQ1LWVhMzZkZDJjMmRlOSIsInJvbGUiOiJ1c3RhIiwibmFtZSI6IkJhYmFyIEtoYW4iLCJlbWFpbCI6ImJhYmFya2gwMzAyQGdtYWlsLmNvbSIsInBob25lIjoiOTIzMDQ2OTk4NjM0IiwiaWF0IjoxNzU5MDcyODYxLCJleHAiOjE3NTk2Nzc2NjF9.g04d7uKDI8tjQDdT6HiWgFimhLp5iIziMYchou3qUrM',
-  USER_ID: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
-  USER_NAME: 'Babar Khan',
-  USER_ROLE: 'usta',
-  RECEIVER_ID: '6e8ae482-0196-43ec-8b74-fc01c2d6ff00',
-  RECEIVER_NAME: 'Customer',
-  JOB_ID: generateUUID(),
-  JOB_TITLE: 'Plumbing Service - Kitchen Sink Repair'
+  TOKEN: process.env.AUTH_TOKEN || '',
+  USER_ID: process.env.USER_ID || '',
+  USER_NAME: process.env.USER_NAME || 'Test User',
+  USER_EMAIL: process.env.USER_EMAIL || 'test@example.com',
+  USER_PHONE: process.env.USER_PHONE || '',
+  USER_ROLE: process.env.USER_ROLE || 'usta',
+  RECEIVER_ID: process.env.RECEIVER_ID || '',
+  RECEIVER_NAME: process.env.RECEIVER_NAME || 'Customer',
+  JOB_ID: uuidv4(),
+  JOB_TITLE: process.env.JOB_TITLE || 'Service Request'
 };
 
-// UUID generator
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 /**
- * Enhanced Test Client for ChatService
+ * Simple Test Client for ChatService
+ * This is just a thin wrapper that uses ChatService
  */
-class ChatTestClient extends EventEmitter {
+class ChatTestClient {
   private rl: readline.Interface;
   private conversationId: string | null = null;
   private isRunning: boolean = false;
-  private connectionState: ConnectionState = ConnectionState.DISCONNECTED;
-  private messageListeners: (() => void)[] = [];
-  private simulateOffline: boolean = false;
-  private autoRetryFailed: boolean = true;
+  private cleanupFunctions: (() => void)[] = [];
 
   constructor() {
-    super();
-    
     // Setup readline interface for user input
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -59,124 +50,315 @@ class ChatTestClient extends EventEmitter {
   }
 
   /**
-   * Initialize the chat service
+   * Start the client
    */
-  async initialize(): Promise<void> {
-    console.log(chalk.cyan('\n🚀 Initializing Chat Service...\n'));
-    
+  async start(): Promise<void> {
     try {
-      // Initialize chat service
-      await chatService.initialize(
-        CONFIG.USER_ID,
-        CONFIG.USER_ROLE,
-        CONFIG.TOKEN,
-        undefined, // Redux store not needed for test
-        {
-          id: CONFIG.USER_ID,
-          name: CONFIG.USER_NAME,
-          email: 'babar@example.com',
-          phone: '923046998634'
-        } as any
-      );
+      this.isRunning = true;
+      
+      // Clear screen and show header
+      console.clear();
+      console.log(chalk.cyan.bold('========================================'));
+      console.log(chalk.cyan.bold('     Chat Service Test Client v2.0     '));
+      console.log(chalk.cyan.bold('========================================'));
+      console.log(chalk.white(`User: ${CONFIG.USER_NAME} (${CONFIG.USER_ROLE})`));
+      console.log(chalk.white(`Job: ${CONFIG.JOB_TITLE}`));
+      console.log(chalk.white(`Receiver: ${CONFIG.RECEIVER_NAME}`));
+      console.log(chalk.gray('\nType /help for commands\n'));
+
+      // Initialize ChatService
+      await this.initializeChatService();
 
       // Setup event listeners
       this.setupEventListeners();
-      
-      // Check offline queue
-      const queueStatus = chatService.getOfflineQueueStatus();
-      if (queueStatus.count > 0) {
-        console.log(chalk.yellow(`📥 ${queueStatus.count} messages in offline queue`));
-        queueStatus.messages.forEach(msg => {
-          console.log(chalk.gray(`  - ${msg.content} (${msg.retryCount} retries)`));
-        });
-      }
 
-      console.log(chalk.green('✅ Chat Service initialized successfully\n'));
-      
+      // Create or find conversation and send initial message
+      await this.setupConversation();
+
+      // Start command prompt
+      this.startCommandPrompt();
+
     } catch (error: any) {
-      console.error(chalk.red('❌ Failed to initialize:'), error.message);
-      throw error;
+      console.error(chalk.red('\n❌ Fatal error:'), error.message);
+      await this.shutdown();
     }
   }
 
   /**
-   * Setup all event listeners
+   * Initialize the chat service
+   */
+  private async initializeChatService(): Promise<void> {
+    console.log(chalk.cyan('🚀 Initializing Chat Service...'));
+
+    // Prepare user details
+    const userDetails: UserRegistrationData = {
+      id: CONFIG.USER_ID,
+      externalId: CONFIG.USER_ID,
+      name: CONFIG.USER_NAME,
+      email: CONFIG.USER_EMAIL,
+      phone: CONFIG.USER_PHONE,
+      role: CONFIG.USER_ROLE as any
+    };
+
+    // Initialize chatService (all logic is in chatService)
+    await chatService.initialize(
+      CONFIG.USER_ID,
+      CONFIG.USER_ROLE,
+      CONFIG.TOKEN,
+      undefined, // No Redux store in test
+      userDetails
+    );
+
+    // Check if we have offline messages
+    const queueStatus = chatService.getOfflineQueueStatus();
+    if (queueStatus.count > 0) {
+      console.log(chalk.yellow(`📥 ${queueStatus.count} messages in offline queue`));
+    }
+
+    console.log(chalk.green('✅ Chat Service initialized\n'));
+  }
+
+  /**
+   * Setup event listeners (using ChatService's methods)
    */
   private setupEventListeners(): void {
     // Connection state changes
-    const cleanupConnection = chatService.onConnectionStateChange((state, details) => {
-      this.connectionState = state;
+    const cleanup1 = chatService.onConnectionStateChange((state, details) => {
+      const stateColor = state === ConnectionState.CONNECTED ? 'green' :
+                        state === ConnectionState.CONNECTING ? 'yellow' :
+                        state === ConnectionState.RECONNECTING ? 'yellow' : 'red';
       
-      const stateColors: Record<ConnectionState, any> = {
-        [ConnectionState.CONNECTED]: chalk.green,
-        [ConnectionState.CONNECTING]: chalk.yellow,
-        [ConnectionState.RECONNECTING]: chalk.yellow,
-        [ConnectionState.DISCONNECTED]: chalk.red,
-        [ConnectionState.ERROR]: chalk.red
-      };
-
-      const color = stateColors[state] || chalk.gray;
-      console.log(color(`\n📡 Connection: ${state}`));
+      console.log(chalk[stateColor](`\n📡 Connection: ${state}`));
       
       if (details?.error) {
         console.log(chalk.red(`  Error: ${details.error}`));
       }
-      
-      if (state === ConnectionState.CONNECTED) {
-        this.handleReconnection();
-      }
     });
-    this.messageListeners.push(cleanupConnection);
+    this.cleanupFunctions.push(cleanup1);
 
     // New messages
-    const cleanupNewMessage = chatService.onNewMessage((message) => {
-      this.handleIncomingMessage(message);
-    });
-    this.messageListeners.push(cleanupNewMessage);
-
-    // Message sent confirmations
-    const cleanupMessageSent = chatService.onMessageSent((data) => {
-      console.log(chalk.green(`\n✅ Message sent: ${data.messageId}`));
+    const cleanup2 = chatService.onNewMessage((message) => {
+      const isMine = message.senderId === CONFIG.USER_ID;
+      const sender = isMine ? 'You' : CONFIG.RECEIVER_NAME;
+      const color = isMine ? 'blue' : 'white';
+      const statusIcon = this.getStatusIcon(message.status);
       
-      // Check if we should retry failed messages
-      if (this.autoRetryFailed && this.conversationId) {
-        this.checkAndRetryFailed();
-      }
+      console.log(chalk[color](`\n💬 [${sender}]: ${message.content} ${statusIcon}`));
     });
-    this.messageListeners.push(cleanupMessageSent);
+    this.cleanupFunctions.push(cleanup2);
+
+    // Message sent
+    const cleanup3 = chatService.onMessageSent((data) => {
+      console.log(chalk.green(`\n✅ Message sent: ${data.messageId}`));
+    });
+    this.cleanupFunctions.push(cleanup3);
 
     // Message errors
-    const cleanupMessageError = chatService.onMessageSendError((data) => {
+    const cleanup4 = chatService.onMessageSendError((data) => {
       console.log(chalk.red(`\n❌ Message failed: ${data.error}`));
-      
-      if (data.clientTempId) {
-        console.log(chalk.yellow('  Tip: Type "retry" to retry failed messages'));
-      }
     });
-    this.messageListeners.push(cleanupMessageError);
+    this.cleanupFunctions.push(cleanup4);
 
-    // Typing indicators
-    const cleanupTyping = chatService.onTyping((userId, isTyping) => {
+    // Typing
+    const cleanup5 = chatService.onTyping((userId, isTyping) => {
       if (userId !== CONFIG.USER_ID && isTyping) {
         console.log(chalk.gray(`\n✏️ ${CONFIG.RECEIVER_NAME} is typing...`));
       }
     });
-    this.messageListeners.push(cleanupTyping);
+    this.cleanupFunctions.push(cleanup5);
   }
 
   /**
-   * Handle incoming messages
+   * Setup conversation
    */
-  private handleIncomingMessage(message: Message): void {
-    const isMine = message.senderId === CONFIG.USER_ID;
-    const sender = isMine ? 'You' : CONFIG.RECEIVER_NAME;
-    const color = isMine ? chalk.blue : chalk.white;
-    const statusIcon = this.getStatusIcon(message.status);
+  private async setupConversation(): Promise<void> {
+    console.log(chalk.cyan('🔍 Setting up conversation...'));
+
+    // Use chatService to find or create conversation
+    const conversation = await chatService.findOrCreateJobConversation(
+      CONFIG.JOB_ID,
+      CONFIG.RECEIVER_ID
+    );
+
+    this.conversationId = conversation.id;
+    console.log(chalk.green(`✅ Conversation ready: ${this.conversationId}`));
+
+    // Load existing messages
+    const messages = await chatService.loadMessages(this.conversationId, {
+      page: 1,
+      limit: 10
+    });
+
+    if (messages.messages.length > 0) {
+      console.log(chalk.gray(`\n📜 Loaded ${messages.messages.length} messages`));
+      
+      // Show last 3 messages
+      messages.messages.slice(0, 3).reverse().forEach(msg => {
+        const sender = msg.senderId === CONFIG.USER_ID ? 'You' : CONFIG.RECEIVER_NAME;
+        console.log(chalk.gray(`  [${sender}]: ${msg.content.substring(0, 50)}...`));
+      });
+    }
+
+    // Send initial message
+    console.log(chalk.cyan('\n📤 Sending initial message...'));
+    await chatService.sendTextMessage(
+      this.conversationId,
+      `Hello! I'm ${CONFIG.USER_NAME}, your usta for the ${CONFIG.JOB_TITLE}.`,
+      CONFIG.RECEIVER_ID
+    );
+  }
+
+  /**
+   * Start command prompt
+   */
+  private startCommandPrompt(): void {
+    this.rl.setPrompt(chalk.cyan('\n> '));
+    this.rl.prompt();
+
+    this.rl.on('line', async (input) => {
+      await this.handleInput(input.trim());
+      
+      if (this.isRunning) {
+        this.rl.prompt();
+      }
+    });
+  }
+
+  /**
+   * Handle user input
+   */
+  private async handleInput(input: string): Promise<void> {
+    if (!input) return;
+
+    // Handle commands
+    if (input.startsWith('/')) {
+      await this.handleCommand(input.toLowerCase());
+    } else {
+      // Send as message using chatService
+      await this.sendMessage(input);
+    }
+  }
+
+  /**
+   * Handle commands
+   */
+  private async handleCommand(command: string): Promise<void> {
+    switch (command) {
+      case '/help':
+        this.showHelp();
+        break;
+
+      case '/status':
+        this.showStatus();
+        break;
+
+      case '/retry':
+        await this.retryFailedMessages();
+        break;
+
+      case '/queue':
+        this.showOfflineQueue();
+        break;
+
+      case '/clear':
+        console.clear();
+        break;
+
+      case '/exit':
+        await this.shutdown();
+        break;
+
+      default:
+        console.log(chalk.red(`Unknown command: ${command}`));
+        console.log(chalk.gray('Type /help for available commands'));
+    }
+  }
+
+  /**
+   * Send a message using chatService
+   */
+  private async sendMessage(text: string): Promise<void> {
+    if (!this.conversationId) {
+      console.log(chalk.red('No active conversation'));
+      return;
+    }
+
+    try {
+      await chatService.sendTextMessage(
+        this.conversationId,
+        text,
+        CONFIG.RECEIVER_ID
+      );
+    } catch (error: any) {
+      console.error(chalk.red('Failed to send:'), error.message);
+    }
+  }
+
+  /**
+   * Retry failed messages using chatService
+   */
+  private async retryFailedMessages(): Promise<void> {
+    if (!this.conversationId) {
+      console.log(chalk.yellow('No active conversation'));
+      return;
+    }
+
+    const result = await chatService.retryAllFailedMessages(this.conversationId);
     
-    console.log(color(`\n💬 [${sender}]: ${message.content} ${statusIcon}`));
+    if (result.attempted === 0) {
+      console.log(chalk.gray('No failed messages to retry'));
+    } else {
+      console.log(chalk.green(`✅ Retried ${result.successful}/${result.attempted} messages`));
+    }
+  }
+
+  /**
+   * Show help
+   */
+  private showHelp(): void {
+    console.log(chalk.cyan('\n📋 Available Commands:'));
+    console.log(chalk.white('  /help     - Show this help menu'));
+    console.log(chalk.white('  /status   - Show connection status'));
+    console.log(chalk.white('  /retry    - Retry failed messages'));
+    console.log(chalk.white('  /queue    - Show offline queue'));
+    console.log(chalk.white('  /clear    - Clear screen'));
+    console.log(chalk.white('  /exit     - Exit the client'));
+    console.log(chalk.white('  <text>    - Send a message'));
+  }
+
+  /**
+   * Show status using chatService
+   */
+  private showStatus(): void {
+    const connectionState = chatService.getConnectionState();
+    const isConnected = chatService.isConnected();
+    const queueStatus = chatService.getOfflineQueueStatus();
     
-    if (message.status === MessageStatus.FAILED) {
-      console.log(chalk.red('  ⚠️ Message failed to send'));
+    console.log(chalk.cyan('\n📊 Status:'));
+    console.log(chalk.white(`  Connection: ${connectionState} (${isConnected ? 'Connected' : 'Disconnected'})`));
+    console.log(chalk.white(`  Conversation: ${this.conversationId || 'None'}`));
+    console.log(chalk.white(`  Offline Queue: ${queueStatus.count} messages`));
+    
+    if (this.conversationId) {
+      const hasFailed = chatService.hasFailedMessages(this.conversationId);
+      console.log(chalk.white(`  Failed Messages: ${hasFailed ? 'Yes' : 'No'}`));
+    }
+  }
+
+  /**
+   * Show offline queue using chatService
+   */
+  private showOfflineQueue(): void {
+    const queue = chatService.getOfflineQueueStatus();
+    
+    console.log(chalk.cyan(`\n📥 Offline Queue (${queue.count} messages):`));
+    
+    if (queue.count === 0) {
+      console.log(chalk.gray('  Empty'));
+    } else {
+      queue.messages.forEach(msg => {
+        console.log(chalk.gray(`  - ${msg.content} (${msg.retryCount} retries)`));
+      });
     }
   }
 
@@ -191,291 +373,9 @@ class ChatTestClient extends EventEmitter {
       [MessageStatus.READ]: '👁️',
       [MessageStatus.FAILED]: '❌',
       [MessageStatus.QUEUED]: '📥',
-      [MessageStatus.EXPIRED]: '❌❌'
+      [MessageStatus.EXPIRED]: '⏰'
     };
     return icons[status] || '';
-  }
-
-  /**
-   * Handle reconnection
-   */
-  private async handleReconnection(): Promise<void> {
-    console.log(chalk.green('\n🔄 Reconnected! Processing offline queue...'));
-    
-    const queueStatus = chatService.getOfflineQueueStatus();
-    if (queueStatus.count > 0) {
-      console.log(chalk.yellow(`  Processing ${queueStatus.count} queued messages...`));
-    }
-  }
-
-  /**
-   * Create or find conversation
-   */
-  private async ensureConversation(): Promise<string> {
-    if (this.conversationId) {
-      return this.conversationId;
-    }
-
-    console.log(chalk.cyan('\n🔍 Finding or creating conversation...'));
-    
-    try {
-      const conversation = await chatService.findOrCreateJobConversation(
-        CONFIG.JOB_ID,
-        CONFIG.RECEIVER_ID
-      );
-      
-      this.conversationId = conversation.id;
-      console.log(chalk.green(`✅ Conversation ready: ${this.conversationId}`));
-      
-      // Load messages
-      await this.loadMessages();
-      
-      return this.conversationId;
-      
-    } catch (error: any) {
-      console.error(chalk.red('❌ Failed to create conversation:'), error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Load messages for current conversation
-   */
-  private async loadMessages(): Promise<void> {
-    if (!this.conversationId) return;
-    
-    try {
-      const result = await chatService.loadMessages(this.conversationId, {
-        page: 1,
-        limit: 10
-      });
-      
-      console.log(chalk.gray(`\n📜 Loaded ${result.messages.length} messages`));
-      
-      // Display recent messages
-      result.messages.slice(0, 5).reverse().forEach(msg => {
-        this.handleIncomingMessage(msg);
-      });
-      
-    } catch (error: any) {
-      console.error(chalk.red('Failed to load messages:'), error.message);
-    }
-  }
-
-  /**
-   * Send a message
-   */
-  private async sendMessage(text: string): Promise<void> {
-    try {
-      // Ensure we have a conversation
-      const convId = await this.ensureConversation();
-      
-      // Simulate offline if enabled
-      if (this.simulateOffline) {
-        console.log(chalk.yellow('\n📵 Simulating offline mode...'));
-      }
-      
-      // Send message
-      const message = await chatService.sendTextMessage(
-        convId,
-        text,
-        CONFIG.RECEIVER_ID
-      );
-      
-      console.log(chalk.gray(`\n📤 Sending: ${message.clientTempId}`));
-      
-      // Show in UI immediately (optimistic update)
-      this.handleIncomingMessage(message);
-      
-    } catch (error: any) {
-      console.error(chalk.red('\n❌ Send failed:'), error.message);
-      
-      if (error.message.includes('wait')) {
-        console.log(chalk.yellow('  Please wait a moment before sending again'));
-      }
-    }
-  }
-
-  /**
-   * Retry failed messages
-   */
-  private async retryFailedMessages(): Promise<void> {
-    if (!this.conversationId) {
-      console.log(chalk.yellow('No active conversation'));
-      return;
-    }
-    
-    const failedMessages = chatService.getFailedMessages(this.conversationId);
-    
-    if (failedMessages.length === 0) {
-      console.log(chalk.gray('No failed messages to retry'));
-      return;
-    }
-    
-    console.log(chalk.yellow(`\n🔄 Retrying ${failedMessages.length} failed messages...`));
-    
-    for (const msg of failedMessages) {
-      try {
-        await chatService.retryFailedMessage(
-          this.conversationId,
-          msg.id,
-          msg.clientTempId
-        );
-        console.log(chalk.green(`  ✅ Retrying: ${msg.content.substring(0, 30)}...`));
-      } catch (error: any) {
-        console.log(chalk.red(`  ❌ Failed: ${error.message}`));
-      }
-    }
-  }
-
-  /**
-   * Check and auto-retry failed messages
-   */
-  private async checkAndRetryFailed(): Promise<void> {
-    if (!this.conversationId || !this.autoRetryFailed) return;
-    
-    const hasFailed = chatService.hasFailedMessages(this.conversationId);
-    if (hasFailed) {
-      console.log(chalk.yellow('\n🔄 Auto-retrying failed messages...'));
-      await this.retryFailedMessages();
-    }
-  }
-
-  /**
-   * Show help menu
-   */
-  private showHelp(): void {
-    console.log(chalk.cyan('\n📋 Available Commands:'));
-    console.log(chalk.white('  /help           - Show this help menu'));
-    console.log(chalk.white('  /status         - Show connection and queue status'));
-    console.log(chalk.white('  /retry          - Retry all failed messages'));
-    console.log(chalk.white('  /queue          - Show offline queue'));
-    console.log(chalk.white('  /offline        - Toggle offline simulation'));
-    console.log(chalk.white('  /auto-retry     - Toggle auto-retry for failed messages'));
-    console.log(chalk.white('  /clear          - Clear screen'));
-    console.log(chalk.white('  /exit           - Exit the client'));
-    console.log(chalk.white('  <text>          - Send a message'));
-  }
-
-  /**
-   * Show status
-   */
-  private showStatus(): void {
-    console.log(chalk.cyan('\n📊 Status:'));
-    console.log(chalk.white(`  Connection: ${this.connectionState}`));
-    console.log(chalk.white(`  Conversation: ${this.conversationId || 'Not created'}`));
-    console.log(chalk.white(`  Offline Mode: ${this.simulateOffline ? 'ON' : 'OFF'}`));
-    console.log(chalk.white(`  Auto-Retry: ${this.autoRetryFailed ? 'ON' : 'OFF'}`));
-    
-    const queueStatus = chatService.getOfflineQueueStatus();
-    console.log(chalk.white(`  Offline Queue: ${queueStatus.count} messages`));
-    
-    if (this.conversationId) {
-      const failedCount = chatService.getFailedMessages(this.conversationId).length;
-      console.log(chalk.white(`  Failed Messages: ${failedCount}`));
-    }
-  }
-
-  /**
-   * Handle user input
-   */
-  private async handleInput(input: string): Promise<void> {
-    const trimmed = input.trim();
-    
-    if (!trimmed) return;
-    
-    // Handle commands
-    if (trimmed.startsWith('/')) {
-      const command = trimmed.toLowerCase();
-      
-      switch (command) {
-        case '/help':
-          this.showHelp();
-          break;
-          
-        case '/status':
-          this.showStatus();
-          break;
-          
-        case '/retry':
-          await this.retryFailedMessages();
-          break;
-          
-        case '/queue':
-          const queue = chatService.getOfflineQueueStatus();
-          console.log(chalk.cyan(`\n📥 Offline Queue (${queue.count} messages):`));
-          queue.messages.forEach(msg => {
-            console.log(chalk.gray(`  - ${msg.content}`));
-          });
-          break;
-          
-        case '/offline':
-          this.simulateOffline = !this.simulateOffline;
-          console.log(chalk.yellow(`\n📵 Offline mode: ${this.simulateOffline ? 'ON' : 'OFF'}`));
-          break;
-          
-        case '/auto-retry':
-          this.autoRetryFailed = !this.autoRetryFailed;
-          console.log(chalk.yellow(`\n🔄 Auto-retry: ${this.autoRetryFailed ? 'ON' : 'OFF'}`));
-          break;
-          
-        case '/clear':
-          console.clear();
-          break;
-          
-        case '/exit':
-          await this.shutdown();
-          break;
-          
-        default:
-          console.log(chalk.red(`Unknown command: ${command}`));
-          console.log(chalk.gray('Type /help for available commands'));
-      }
-    } else {
-      // Send as message
-      await this.sendMessage(trimmed);
-    }
-  }
-
-  /**
-   * Start the interactive client
-   */
-  async start(): Promise<void> {
-    this.isRunning = true;
-    
-    console.clear();
-    console.log(chalk.cyan.bold('========================================'));
-    console.log(chalk.cyan.bold('     Chat Service Test Client v2.0     '));
-    console.log(chalk.cyan.bold('========================================'));
-    console.log(chalk.white(`User: ${CONFIG.USER_NAME} (${CONFIG.USER_ROLE})`));
-    console.log(chalk.white(`Job: ${CONFIG.JOB_TITLE}`));
-    console.log(chalk.white(`Receiver: ${CONFIG.RECEIVER_NAME}`));
-    console.log(chalk.gray('\nType /help for commands\n'));
-    
-    try {
-      // Initialize service
-      await this.initialize();
-      
-      // Send initial message
-      console.log(chalk.cyan('\n📤 Sending initial message...'));
-      await this.sendMessage(`Hello! I'm ${CONFIG.USER_NAME}, your usta for the ${CONFIG.JOB_TITLE}.`);
-      
-      // Start input loop
-      this.rl.setPrompt(chalk.cyan('\n> '));
-      this.rl.prompt();
-      
-      this.rl.on('line', async (input) => {
-        await this.handleInput(input);
-        
-        if (this.isRunning) {
-          this.rl.prompt();
-        }
-      });
-      
-    } catch (error: any) {
-      console.error(chalk.red('\n❌ Fatal error:'), error.message);
-      await this.shutdown();
-    }
   }
 
   /**
@@ -486,11 +386,10 @@ class ChatTestClient extends EventEmitter {
     
     this.isRunning = false;
     
-    // Clean up listeners
-    this.messageListeners.forEach(cleanup => cleanup());
-    this.messageListeners = [];
+    // Clean up event listeners
+    this.cleanupFunctions.forEach(cleanup => cleanup());
     
-    // Disconnect chat service
+    // Disconnect chatService
     await chatService.disconnect();
     
     // Close readline
@@ -514,7 +413,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error(chalk.red('\n❌ Unhandled Rejection:'), reason);
   process.exit(1);
 });

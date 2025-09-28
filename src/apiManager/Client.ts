@@ -1,4 +1,4 @@
-// Client.ts - Fixed TypeScript errors
+// Client.ts - Fixed for both React Native and Node.js environments
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -6,10 +6,13 @@ import axios, {
   AxiosError,
   InternalAxiosRequestConfig,
 } from 'axios';
-import {Platform} from 'react-native';
 
 import {AppConfig, AppLogger} from '../config/AppConfig';
 import {AuthService} from '../services/AuthService';
+
+// Platform detection
+const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
+const Platform = isNodeEnvironment ? { OS: 'node' } : require('react-native').Platform;
 
 // Request metadata interface
 interface RequestMetadata {
@@ -127,7 +130,7 @@ const handleRetry = async (
   }
 };
 
-// Enhanced base client function - FIXED VERSION
+// Enhanced base client function
 const createClient = (
   baseURL: string,
   token: string | null = null,
@@ -170,7 +173,6 @@ const createClient = (
         startTime: Date.now(),
       });
 
-      // FIXED: Check if debug.enabled exists instead of enableDetailedLogging
       if (AppConfig.debug?.enabled) {
         AppLogger.info('API Request:', {
           method: config.method?.toUpperCase(),
@@ -201,7 +203,6 @@ const createClient = (
           endTime: Date.now(),
         });
 
-        // FIXED: Check if debug.enabled exists instead of enableDetailedLogging
         if (AppConfig.debug?.enabled) {
           const metadata = getRequestMetadata(response.config as InternalAxiosRequestConfig);
           const duration = metadata ? Date.now() - metadata.startTime : 0;
@@ -241,7 +242,6 @@ const createClient = (
           const currentToken = getAuthorizationToken(originalRequest.headers);
           
           if (currentToken && AuthService.refreshToken) {
-            // FIXED: Call refreshToken without parameters
             const newToken = await AuthService.refreshToken();
             
             if (newToken) {
@@ -257,12 +257,9 @@ const createClient = (
           
           // If refresh fails, redirect to login
           AppLogger.warn('Token refresh failed, redirecting to login');
-          // You might want to emit an event or call a navigation function here
-          // NavigationService.navigate('Login');
           
         } catch (refreshError) {
           AppLogger.error('Token refresh error:', refreshError);
-          // Handle refresh failure (e.g., redirect to login)
         }
       }
 
@@ -340,87 +337,12 @@ export const chatClient = (token: string | null = null): AxiosInstance => {
   );
 };
 
-// Enhanced notification client with specialized functions
-export const NotificationService = {
-  getClient: (token: string | null = null): AxiosInstance => {
-    return notificationClient(token);
-  },
-
-  // Get all notifications
-  getAllNotifications: async (
-    token: string | null,
-    page: number = 1,
-    limit: number = 20,
-  ): Promise<AxiosResponse> => {
-    return notificationClient(token).get('/notifications', {
-      params: {page, limit},
-    });
-  },
-
-  // Get notifications by type
-  getNotificationsByType: async (
-    token: string | null,
-    type: string,
-    page: number = 1,
-    limit: number = 20,
-  ): Promise<AxiosResponse> => {
-    return notificationClient(token).get(`/notifications/type/${type}`, {
-      params: {page, limit},
-    });
-  },
-
-  // Get notification by ID
-  getNotificationById: async (
-    token: string | null,
-    id: string,
-  ): Promise<AxiosResponse> => {
-    return notificationClient(token).get(`/notifications/${id}`);
-  },
-
-  // Mark notification as read
-  markAsRead: async (
-    token: string | null,
-    id: string,
-  ): Promise<AxiosResponse> => {
-    return notificationClient(token).post(`/notifications/${id}/read`);
-  },
-
-  // Mark all notifications as read
-  markAllAsRead: async (token: string | null): Promise<AxiosResponse> => {
-    return notificationClient(token).post('/notifications/read-all');
-  },
-
-  // Get unread count
-  getUnreadCount: async (token: string | null): Promise<AxiosResponse> => {
-    return notificationClient(token).get('/notifications/unread/count');
-  },
-
-  // Delete notification
-  deleteNotification: async (
-    token: string | null,
-    id: string,
-  ): Promise<AxiosResponse> => {
-    return notificationClient(token).delete(`/notifications/${id}`);
-  },
-};
-
-// Enhanced chat service with file size validation
+// Enhanced Chat Service with proper FormData handling
 export const ChatService = {
-  /**
-   * Get the base chat client with authorization
-   * @param token Authentication token
-   * @returns Configured axios instance
-   */
   getClient: (token: string | null = null): AxiosInstance => {
     return createClient(AppConfig.chat.baseUrl, token);
   },
 
-  /**
-   * Get chat history between two users for a specific job
-   * @param token Authentication token
-   * @param params Query parameters including jobId, receiverId, and pagination
-   * @returns Promise with chat history response
-   */
   getChatHistory: async (
     token: string | null,
     params: {
@@ -435,13 +357,6 @@ export const ChatService = {
     });
   },
 
-  /**
-   * Get the list of active chats for the current user
-   * @param token Authentication token
-   * @param page Page number for pagination
-   * @param limit Number of items per page
-   * @returns Promise with chat list response
-   */
   getChatList: async (
     token: string | null,
     page: number = 1,
@@ -452,12 +367,6 @@ export const ChatService = {
     });
   },
 
-  /**
-   * Mark messages as read for a specific chat
-   * @param token Authentication token
-   * @param params Parameters including jobId and senderId
-   * @returns Promise with response
-   */
   markMessagesAsRead: async (
     token: string | null,
     params: {
@@ -471,12 +380,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Block a user from sending messages
-   * @param token Authentication token
-   * @param userId ID of the user to block
-   * @returns Promise with response
-   */
   blockUser: async (
     token: string | null,
     userId: string | number,
@@ -486,12 +389,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Unblock a previously blocked user
-   * @param token Authentication token
-   * @param userId ID of the user to unblock
-   * @returns Promise with response
-   */
   unblockUser: async (
     token: string | null,
     userId: string | number,
@@ -501,12 +398,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Delete a chat conversation
-   * @param token Authentication token
-   * @param params Parameters including jobId and otherUserId
-   * @returns Promise with response
-   */
   deleteChat: async (
     token: string | null,
     params: {
@@ -520,11 +411,7 @@ export const ChatService = {
   },
 
   /**
-   * Upload a file attachment to the chat with validation
-   * @param token Authentication token
-   * @param file File object to upload
-   * @param type Type of the attachment (image, audio, or file)
-   * @returns Promise with upload response
+   * Upload a file attachment - Fixed for Node.js environment
    */
   uploadAttachment: async (
     token: string | null,
@@ -545,41 +432,59 @@ export const ChatService = {
       );
     }
 
-    const formData = new FormData();
-    formData.append('file', {
-      uri: file.uri,
-      type:
-        file.type ||
-        (type === 'image'
-          ? 'image/jpeg'
-          : type === 'audio'
-          ? 'audio/mp4'
-          : 'application/octet-stream'),
-      name:
-        file.name ||
-        `${type}-${Date.now()}.${
-          type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin'
-        }`,
-    });
-    formData.append('type', type);
+    // Handle FormData differently for Node.js vs React Native
+    if (isNodeEnvironment) {
+      // Node.js environment - use standard FormData
+      const FormData = require('form-data');
+      const fs = require('fs');
+      const formData = new FormData();
+      
+      // If file has a path, read it as a stream
+      if (file.path) {
+        formData.append('file', fs.createReadStream(file.path), {
+          filename: file.name || `${type}-${Date.now()}.bin`,
+          contentType: file.type || 'application/octet-stream'
+        });
+      } else if (file.buffer) {
+        // If file has a buffer
+        formData.append('file', file.buffer, {
+          filename: file.name || `${type}-${Date.now()}.bin`,
+          contentType: file.type || 'application/octet-stream'
+        });
+      } else {
+        throw new Error('Invalid file format for Node.js environment');
+      }
+      
+      formData.append('type', type);
 
-    return createClient(
-      AppConfig.chat.baseUrl,
-      token,
-      {
-        'Content-Type': 'multipart/form-data',
-      },
-      AppConfig.chat?.uploadTimeout || AppConfig.api.timeout,
-    ).post('/chats/upload', formData);
+      return createClient(
+        AppConfig.chat.baseUrl,
+        token,
+        formData.getHeaders(),
+        AppConfig.chat?.uploadTimeout || AppConfig.api.timeout,
+      ).post('/chats/upload', formData);
+      
+    } else {
+      // React Native environment
+      const formData = new FormData();
+      formData.append('file', {
+        uri: file.uri,
+        type: file.type || (type === 'image' ? 'image/jpeg' : type === 'audio' ? 'audio/mp4' : 'application/octet-stream'),
+        name: file.name || `${type}-${Date.now()}.${type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin'}`,
+      } as any);
+      formData.append('type', type);
+
+      return createClient(
+        AppConfig.chat.baseUrl,
+        token,
+        {
+          'Content-Type': 'multipart/form-data',
+        },
+        AppConfig.chat?.uploadTimeout || AppConfig.api.timeout,
+      ).post('/chats/upload', formData);
+    }
   },
 
-  /**
-   * Search through chat messages
-   * @param token Authentication token
-   * @param searchQuery Text to search for
-   * @param params Optional parameters including pagination and filters
-   * @returns Promise with search results response
-   */
   searchMessages: async (
     token: string | null,
     searchQuery: string,
@@ -598,21 +503,10 @@ export const ChatService = {
     });
   },
 
-  /**
-   * Get chat statistics (message count, unread count, etc.)
-   * @param token Authentication token
-   * @returns Promise with chat statistics response
-   */
   getChatStats: async (token: string | null): Promise<AxiosResponse> => {
     return createClient(AppConfig.chat.baseUrl, token).get('/chats/stats');
   },
 
-  /**
-   * Get user's online status
-   * @param token Authentication token
-   * @param userId ID of the user to check
-   * @returns Promise with online status response
-   */
   getUserOnlineStatus: async (
     token: string | null,
     userId: string | number,
@@ -622,12 +516,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Update the user's own online status
-   * @param token Authentication token
-   * @param isOnline Boolean indicating whether the user is online
-   * @returns Promise with response
-   */
   updateOnlineStatus: async (
     token: string | null,
     isOnline: boolean,
@@ -637,12 +525,6 @@ export const ChatService = {
     });
   },
 
-  /**
-   * Delete a specific message
-   * @param token Authentication token
-   * @param messageId ID of the message to delete
-   * @returns Promise with response
-   */
   deleteMessage: async (
     token: string | null,
     messageId: string,
@@ -652,13 +534,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Edit a previously sent message
-   * @param token Authentication token
-   * @param messageId ID of the message to edit
-   * @param newText New text content for the message
-   * @returns Promise with response
-   */
   editMessage: async (
     token: string | null,
     messageId: string,
@@ -670,12 +545,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Report inappropriate message or user
-   * @param token Authentication token
-   * @param params Report parameters
-   * @returns Promise with response
-   */
   reportContent: async (
     token: string | null,
     params: {
@@ -691,12 +560,6 @@ export const ChatService = {
     );
   },
 
-  /**
-   * Send typing indicator to the other user
-   * @param token Authentication token
-   * @param params Parameters including jobId and receiverId
-   * @returns Promise with response
-   */
   sendTypingIndicator: async (
     token: string | null,
     params: {
@@ -712,6 +575,63 @@ export const ChatService = {
   },
 };
 
+// Enhanced notification client with specialized functions
+export const NotificationService = {
+  getClient: (token: string | null = null): AxiosInstance => {
+    return notificationClient(token);
+  },
+
+  getAllNotifications: async (
+    token: string | null,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<AxiosResponse> => {
+    return notificationClient(token).get('/notifications', {
+      params: {page, limit},
+    });
+  },
+
+  getNotificationsByType: async (
+    token: string | null,
+    type: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<AxiosResponse> => {
+    return notificationClient(token).get(`/notifications/type/${type}`, {
+      params: {page, limit},
+    });
+  },
+
+  getNotificationById: async (
+    token: string | null,
+    id: string,
+  ): Promise<AxiosResponse> => {
+    return notificationClient(token).get(`/notifications/${id}`);
+  },
+
+  markAsRead: async (
+    token: string | null,
+    id: string,
+  ): Promise<AxiosResponse> => {
+    return notificationClient(token).post(`/notifications/${id}/read`);
+  },
+
+  markAllAsRead: async (token: string | null): Promise<AxiosResponse> => {
+    return notificationClient(token).post('/notifications/read-all');
+  },
+
+  getUnreadCount: async (token: string | null): Promise<AxiosResponse> => {
+    return notificationClient(token).get('/notifications/unread/count');
+  },
+
+  deleteNotification: async (
+    token: string | null,
+    id: string,
+  ): Promise<AxiosResponse> => {
+    return notificationClient(token).delete(`/notifications/${id}`);
+  },
+};
+
 // Export environment info for troubleshooting
 export const API_ENV = {
   environment: AppConfig.environment,
@@ -719,13 +639,13 @@ export const API_ENV = {
   currentSocketUrl: AppConfig.socket.url,
   isProduction: AppConfig.isProduction,
   isDevelopment: AppConfig.isDevelopment,
-  isStaging: AppConfig.isStaging,
+  isStaging: AppConfig.isStaging || false,
   features: AppConfig.features,
   debug: AppConfig.debug,
   performance: AppConfig.performance,
 };
 
-// Export backward compatibility constants using correct property names
+// Export backward compatibility constants
 export const BASE_API_URL_STAGING = AppConfig.api.baseUrl;
 export const BASE_API_URL_PRODUCTION = AppConfig.api.baseUrl;
 export const BASE_SOCKET_URL = AppConfig.socket.url;

@@ -1,6 +1,15 @@
 // ChatService.ts - Complete Updated Production-Ready Implementation with ALL Methods
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { v4 as uuidv4 } from 'uuid';
+import { UUID } from 'crypto';
+
+import { 
+  IChatStore, 
+  IChatActions, 
+  NoOpStore,
+  MockStore 
+} from '../types/store';
 
 // Type imports (always the same)
 import { 
@@ -27,14 +36,80 @@ import {
   AuthException,
   UploadFileResponse
 } from '../types/chat';
-import { UUID } from 'crypto';
+
+
+// Mock AsyncStorage for Node.js
+const AsyncStorage = typeof window === 'undefined' 
+  ? require('../mocks/AsyncStorage').default
+  : require('@react-native-async-storage/async-storage').default;
+
+ // Platform detection
+const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
+const Platform = isNodeEnvironment 
+  ? { OS: 'node', Version: process.version } 
+  : require('react-native').Platform;
+ 
 
 // Conditional imports based on environment
 const isTestEnvironment = process.env.NODE_ENV === 'test' ;
 
-let socketService: any;
-let chatApiService: any;
-let Platform: any;
+// Import services
+import { socketService } from './SocketService';
+import { chatApiService } from './ChatApiService';
+
+// Import or create actions based on environment
+let defaultActions: IChatActions;
+
+if (isNodeEnvironment) {
+  // Use mock actions for Node.js
+  const messagingReducer = require('../stores/reducer/messagingReducer');
+  defaultActions = {
+    setInitialized: messagingReducer.setInitialized,
+    setConnectionState: messagingReducer.setConnectionState,
+    handleNewMessage: messagingReducer.handleNewMessage,
+    markConversationAsRead: messagingReducer.markConversationAsRead,
+    setActiveConversation: messagingReducer.setActiveConversation,
+    updateTypingUsers: messagingReducer.updateTypingUsers,
+    resetMessagingState: messagingReducer.resetMessagingState,
+    updateConversationMetadata: messagingReducer.updateConversationMetadata,
+    removeConversation: messagingReducer.removeConversation,
+    syncConversations: messagingReducer.syncConversations,
+  };
+} else {
+  // In React Native, these would be imported from the actual Redux actions
+  try {
+    const messagingReducer = require('../stores/reducer/messagingReducer');
+    defaultActions = {
+      setInitialized: messagingReducer.setInitialized,
+      setConnectionState: messagingReducer.setConnectionState,
+      handleNewMessage: messagingReducer.handleNewMessage,
+      markConversationAsRead: messagingReducer.markConversationAsRead,
+      setActiveConversation: messagingReducer.setActiveConversation,
+      updateTypingUsers: messagingReducer.updateTypingUsers,
+      resetMessagingState: messagingReducer.resetMessagingState,
+      updateConversationMetadata: messagingReducer.updateConversationMetadata,
+      removeConversation: messagingReducer.removeConversation,
+      syncConversations: messagingReducer.syncConversations,
+    };
+  } catch (error) {
+    // Fallback to no-op actions if Redux is not available
+    console.warn('Redux actions not available, using no-op actions');
+    defaultActions = {
+      setInitialized: (initialized: boolean) => ({ type: 'setInitialized', payload: initialized }),
+      setConnectionState: (state: any) => ({ type: 'setConnectionState', payload: state }),
+      handleNewMessage: (data: any) => ({ type: 'handleNewMessage', payload: data }),
+      markConversationAsRead: (id: string) => ({ type: 'markConversationAsRead', payload: id }),
+      setActiveConversation: (id: string | null) => ({ type: 'setActiveConversation', payload: id }),
+      updateTypingUsers: (data: any) => ({ type: 'updateTypingUsers', payload: data }),
+      resetMessagingState: () => ({ type: 'resetMessagingState' }),
+      updateConversationMetadata: (data: any) => ({ type: 'updateConversationMetadata', payload: data }),
+      removeConversation: (id: string) => ({ type: 'removeConversation', payload: id }),
+      syncConversations: (conversations: any) => ({ type: 'syncConversations', payload: conversations }),
+    };
+  }
+}
+
+
 let reduxActions: any = {};
 
 if (isTestEnvironment) {
@@ -118,6 +193,54 @@ interface TimeoutRef {
 }
 
 
+if (isNodeEnvironment) {
+  // Use mock actions for Node.js
+  const messagingReducer = require('../stores/reducer/messagingReducer');
+  defaultActions = {
+    setInitialized: messagingReducer.setInitialized,
+    setConnectionState: messagingReducer.setConnectionState,
+    handleNewMessage: messagingReducer.handleNewMessage,
+    markConversationAsRead: messagingReducer.markConversationAsRead,
+    setActiveConversation: messagingReducer.setActiveConversation,
+    updateTypingUsers: messagingReducer.updateTypingUsers,
+    resetMessagingState: messagingReducer.resetMessagingState,
+    updateConversationMetadata: messagingReducer.updateConversationMetadata,
+    removeConversation: messagingReducer.removeConversation,
+    syncConversations: messagingReducer.syncConversations,
+  };
+} else {
+  // In React Native, these would be imported from the actual Redux actions
+  try {
+    const messagingReducer = require('../stores/reducer/messagingReducer');
+    defaultActions = {
+      setInitialized: messagingReducer.setInitialized,
+      setConnectionState: messagingReducer.setConnectionState,
+      handleNewMessage: messagingReducer.handleNewMessage,
+      markConversationAsRead: messagingReducer.markConversationAsRead,
+      setActiveConversation: messagingReducer.setActiveConversation,
+      updateTypingUsers: messagingReducer.updateTypingUsers,
+      resetMessagingState: messagingReducer.resetMessagingState,
+      updateConversationMetadata: messagingReducer.updateConversationMetadata,
+      removeConversation: messagingReducer.removeConversation,
+      syncConversations: messagingReducer.syncConversations,
+    };
+  } catch (error) {
+    // Fallback to no-op actions if Redux is not available
+    console.warn('Redux actions not available, using no-op actions');
+    defaultActions = {
+      setInitialized: (initialized: boolean) => ({ type: 'setInitialized', payload: initialized }),
+      setConnectionState: (state: any) => ({ type: 'setConnectionState', payload: state }),
+      handleNewMessage: (data: any) => ({ type: 'handleNewMessage', payload: data }),
+      markConversationAsRead: (id: string) => ({ type: 'markConversationAsRead', payload: id }),
+      setActiveConversation: (id: string | null) => ({ type: 'setActiveConversation', payload: id }),
+      updateTypingUsers: (data: any) => ({ type: 'updateTypingUsers', payload: data }),
+      resetMessagingState: () => ({ type: 'resetMessagingState' }),
+      updateConversationMetadata: (data: any) => ({ type: 'updateConversationMetadata', payload: data }),
+      removeConversation: (id: string) => ({ type: 'removeConversation', payload: id }),
+      syncConversations: (conversations: any) => ({ type: 'syncConversations', payload: conversations }),
+    };
+  }
+}
 
 class ChatService {
   private userId: string = '';
