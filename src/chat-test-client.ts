@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 dotenv.config();
 
 // Import the ChatService (the main logic)
-import { chatService } from './services/chatService';
+import { chatService } from './services/ChatService';
 import { 
   MessageStatus, 
   ConnectionState,
