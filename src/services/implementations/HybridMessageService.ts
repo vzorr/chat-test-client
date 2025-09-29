@@ -1,10 +1,10 @@
 // src/services/implementations/hybrid/HybridMessageService.ts
-import { BaseMessageService } from '../base/BaseMessageService';
+import { BaseMessageService } from './BaseMessageService';
 import { 
   IMessageService,
   ICacheService,
   IOfflineQueueService
-} from '../../interfaces';
+} from '../interfaces';
 import { 
   Message, 
   MessageLoadOptions, 
@@ -12,9 +12,9 @@ import {
   MessageStatus,
   AttachmentType,
   ConnectionState
-} from '../../../types/chat';
-import { RestMessageService } from '../rest/RestMessageService';
-import { SocketMessageService } from '../socket/SocketMessageService';
+} from '../../types/chat';
+import { RestMessageService } from './RestMessageService';
+import { SocketMessageService } from './SocketMessageService';
 
 export class HybridMessageService extends BaseMessageService implements IMessageService {
   private restService: RestMessageService;

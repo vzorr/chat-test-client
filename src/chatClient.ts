@@ -613,24 +613,32 @@ class ChatTestClient {
     console.log();
   }
 
+
   /**
-   * Show offline queue
-   */
-  private showOfflineQueue() {
-    const queue = chatService.getOfflineQueueStatus();
-    
-    console.log(chalk.cyan(`\n📥 Offline Queue (${queue.count} messages):`));
-    
-    if (queue.count === 0) {
-      console.log(chalk.gray('  Empty'));
-    } else {
-      queue.messages.forEach(msg => {
-        const age = Math.floor(msg.age / 1000);
-        console.log(chalk.gray(`  - "${msg.content}" (${msg.retryCount} retries, ${age}s old)`));
-      });
-    }
-    console.log();
+ * Show offline queue
+ */
+private showOfflineQueue() {
+  const queue = chatService.getOfflineQueueStatus();
+  
+  console.log(chalk.cyan(`\n📥 Offline Queue (${queue.count} messages):`));
+  
+  if (queue.count === 0) {
+    console.log(chalk.gray('  Empty'));
+  } else {
+    queue.messages.forEach((msg: {
+      clientTempId: string;
+      conversationId: string;
+      content: string;
+      timestamp: string;
+      retryCount: number;
+      age: number;
+    }) => {
+      const age = Math.floor(msg.age / 1000);
+      console.log(chalk.gray(`  - "${msg.content}" (${msg.retryCount} retries, ${age}s old)`));
+    });
   }
+  console.log();
+}
 
   /**
    * Get status icon for message

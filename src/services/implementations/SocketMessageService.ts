@@ -1,13 +1,13 @@
 // src/services/implementations/socket/SocketMessageService.ts
-import { BaseMessageService } from '../base/BaseMessageService';
-import { IMessageService, ICacheService } from '../../interfaces';
+import { BaseMessageService } from './BaseMessageService';
+import { IMessageService, ICacheService } from '../interfaces';
 import { 
   Message, 
   MessageLoadOptions, 
   MessageLoadResult,
   MessageStatus,
   AttachmentType
-} from '../../../types/chat';
+} from '../../types/chat';
 
 export class SocketMessageService extends BaseMessageService implements IMessageService {
   constructor(

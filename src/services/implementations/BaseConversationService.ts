@@ -8,9 +8,9 @@ import {
   ConversationStatus,
   UserRole,
   Message
-} from '../../../types/chat';
-import { ICacheService } from '../../interfaces';
-import { ValidationException } from '../../../types/chat';
+} from '../../types/chat';
+import { ICacheService } from '../interfaces';
+import { ValidationException } from '../../types/chat';
 
 /**
  * Base class with shared conversation logic - no duplication

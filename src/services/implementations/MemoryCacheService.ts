@@ -1,6 +1,6 @@
 // src/services/implementations/cache/MemoryCacheService.ts
-import { ICacheService } from '../../interfaces';
-import { Message, ServerConversation } from '../../../types/chat';
+import { ICacheService } from '../interfaces';
+import { Message, ServerConversation } from '../../types/chat';
 
 interface CacheMetrics {
   hitCount: number;

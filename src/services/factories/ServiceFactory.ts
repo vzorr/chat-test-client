@@ -36,7 +36,7 @@ import { FileStorageService } from '../implementations/storage/FileStorageServic
 import { MemoryCacheService } from '../implementations/MemoryCacheService';
 
 // Socket client
-import { socketService } from '../SocketService';
+import { socketService } from '../implementations/SocketService';
 
 export interface ServiceFactoryConfig {
   token?: string;

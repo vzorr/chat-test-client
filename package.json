@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/chat-test-client.js",
-    "dev": "ts-node src/chat-test-client.ts",
+    "start": "node dist/chatClient.js",
+    "dev": "ts-node src/chatClient.ts",
     "test": "npm run build && npm start",
     "socket-test": "node socket-test.js",
     "clean": "rm -rf dist",

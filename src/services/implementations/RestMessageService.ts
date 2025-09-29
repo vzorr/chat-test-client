@@ -1,6 +1,6 @@
 // src/services/implementations/rest/RestMessageService.ts
-import { BaseMessageService } from '../base/BaseMessageService';
-import { IMessageService, ICacheService } from '../../interfaces';
+import { BaseMessageService } from './BaseMessageService';
+import { IMessageService, ICacheService } from '../interfaces';
 import { 
   Message, 
   MessageLoadOptions, 
@@ -8,7 +8,7 @@ import {
   MessageStatus,
   AttachmentType,
   Attachment
-} from '../../../types/chat';
+} from '../../types/chat';
 
 export class RestMessageService extends BaseMessageService implements IMessageService {
   constructor(

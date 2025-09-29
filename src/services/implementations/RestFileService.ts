@@ -1,13 +1,14 @@
 // src/services/implementations/rest/RestFileService.ts
-import { IFileService } from '../../interfaces';
+import { IFileService } from '../interfaces';
 import { 
   Attachment,
   AttachmentType,
   ValidationException,
   FileUploadException,
   NetworkException
-} from '../../../types/chat';
+} from '../../types/chat';
 
+import { logger } from '../../utils/Logger';
 export class RestFileService implements IFileService {
   private readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
   private readonly MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -224,33 +225,46 @@ export class RestFileService implements IFileService {
   }
 
   private createFormData(file: any, type: AttachmentType): FormData {
-    const formData = new FormData();
-    
-    // Handle different file input formats
-    if (typeof window !== 'undefined' && file instanceof File) {
-      // Browser File object
-      formData.append('file', file);
-    } else if (file.uri) {
-      // React Native file format
-      formData.append('file', {
-        uri: file.uri,
-        type: file.type || this.getMimeType(type),
-        name: file.name || `${type}-${Date.now()}.${this.getFileExtension(type)}`
-      } as any);
-    } else if (file.path) {
-      // Node.js file path
-      const fs = require('fs');
-      formData.append('file', fs.createReadStream(file.path), {
-        filename: file.name || `${type}-${Date.now()}.${this.getFileExtension(type)}`,
-        contentType: file.type || this.getMimeType(type)
-      });
-    }
-    
-    formData.append('type', type);
-    formData.append('userId', this.userId);
-    
-    return formData;
+  const formData = new FormData();
+  
+  // Handle different file input formats
+  if (typeof window !== 'undefined' && file instanceof File) {
+    // Browser File object
+    formData.append('file', file);
+  } else if (file.uri) {
+    // React Native file format
+    formData.append('file', {
+      uri: file.uri,
+      type: file.type || this.getMimeType(type),
+      name: file.name || `${type}-${Date.now()}.${this.getFileExtension(type)}`
+    } as any);
+  } else if (file.path) {
+    // Node.js file path
+    this.appendNodeFileToFormData(formData, file, type);
   }
+  
+  formData.append('type', type);
+  formData.append('userId', this.userId);
+  
+  return formData;
+}
+
+private appendNodeFileToFormData(formData: FormData, file: any, type: AttachmentType): void {
+  try {
+    const fs = require('fs');
+    const stream = fs.createReadStream(file.path);
+    const filename = file.name || `${type}-${Date.now()}.${this.getFileExtension(type)}`;
+    
+    // Cast to any to handle different FormData implementations
+    (formData as any).append('file', stream, {
+      filename: filename,
+      contentType: file.type || this.getMimeType(type)
+    });
+  } catch (error) {
+    logger.error('Failed to append Node.js file to FormData:', error);
+    throw new Error('Failed to process file for upload');
+  }
+}
 
   private getMaxSizeForType(type: AttachmentType): number {
     switch (type) {

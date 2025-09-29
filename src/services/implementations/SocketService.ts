@@ -1,8 +1,8 @@
 // SocketService.ts - Enhanced with proper types and memory leak prevention
 import io, { Socket } from 'socket.io-client';
-import { Attachment, AttachmentType, Message, MessageStatus, MessageType } from '../types/chat';
-import { AppConfig, SocketConfig, AppLogger } from '../config/AppConfig';
-import { IRealtimeService } from '../services/interfaces';
+import { Attachment, AttachmentType, Message, MessageStatus, MessageType } from '../../types/chat';
+import { AppConfig, SocketConfig, AppLogger } from '../../config/AppConfig';
+import { IRealtimeService } from '../interfaces';
 
 // Typed event callbacks
 type MessageCallback = (message: Message) => void;
@@ -574,4 +574,3 @@ class SocketService implements IRealtimeService {
 }
 
 export const socketService = new SocketService();
-export { ConnectionState };

@@ -5,9 +5,9 @@ import {
   MessageType,
   AttachmentType,
   Attachment
-} from '../../../types/chat';
+} from '../../types/chat';
 import { v4 as uuidv4 } from 'uuid';
-import { ICacheService } from '../../interfaces';
+import { ICacheService } from '../interfaces';
 
 /**
  * Base class with shared message logic - no duplication

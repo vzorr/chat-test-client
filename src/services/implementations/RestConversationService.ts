@@ -1,6 +1,6 @@
 // src/services/implementations/rest/RestConversationService.ts
-import { BaseConversationService } from '../base/BaseConversationService';
-import { IConversationService, ICacheService } from '../../interfaces';
+import { BaseConversationService } from './BaseConversationService';
+import { IConversationService, ICacheService } from '../interfaces';
 import {
   ServerConversation,
   ConversationType,
@@ -9,7 +9,7 @@ import {
   ValidationException,
   NetworkException,
   AuthException
-} from '../../../types/chat';
+} from '../../types/chat';
 
 export class RestConversationService extends BaseConversationService implements IConversationService {
   constructor(
@@ -26,11 +26,7 @@ export class RestConversationService extends BaseConversationService implements 
     jobId?: string;
     jobTitle?: string;
     status?: ConversationStatus;
-  }): Promise<{
-    success: boolean;
-    existing: boolean;
-    conversation: ServerConversation;
-  }> {
+  }) {
     // Validate using base class method
     this.validateConversationCreation(params);
     
@@ -84,7 +80,7 @@ export class RestConversationService extends BaseConversationService implements 
     }
   }
 
-  async getConversation(id: string): Promise<ServerConversation> {
+  async getConversation(id: string) {
     if (!id?.trim()) {
       throw new ValidationException('Conversation ID is required');
     }
@@ -119,11 +115,7 @@ export class RestConversationService extends BaseConversationService implements 
     status?: ConversationStatus;
     isPinned?: boolean;
     isMuted?: boolean;
-  }): Promise<{
-    conversations: ServerConversation[];
-    hasMore: boolean;
-    total: number;
-  }> {
+  }) {
     try {
       // Build query using base class method
       const queryParams = this.buildQueryParams(params);
@@ -175,7 +167,7 @@ export class RestConversationService extends BaseConversationService implements 
       includeArchived?: boolean;
       searchFields?: ('jobTitle' | 'userName' | 'messageContent')[];
     }
-  ): Promise<ServerConversation[]> {
+  ) {
     if (!searchTerm?.trim()) {
       throw new ValidationException('Search term is required');
     }
@@ -244,7 +236,7 @@ export class RestConversationService extends BaseConversationService implements 
   async findJobConversation(
     jobId: string,
     otherUserId: string
-  ): Promise<ServerConversation | null> {
+  ) {
     if (!jobId?.trim()) {
       throw new ValidationException('Job ID is required');
     }
@@ -285,7 +277,7 @@ export class RestConversationService extends BaseConversationService implements 
   async updateConversationSettings(
     conversationId: string,
     settings: Partial<ConversationSettings>
-  ): Promise<void> {
+  ) {
     if (!conversationId?.trim()) {
       throw new ValidationException('Conversation ID is required');
     }
@@ -293,8 +285,20 @@ export class RestConversationService extends BaseConversationService implements 
     try {
       await this.apiClient.patch(`/conversations/${conversationId}/settings`, settings);
       
-      // Update cache
-      this.updateCachedConversation(conversationId, { settings });
+      // Update cache - merge with existing settings
+      const conversation = this.getCachedConversations().find(c => c.id === conversationId);
+      if (conversation) {
+        // Merge the partial settings with existing settings to maintain all required properties
+        const updatedSettings: ConversationSettings = {
+          ...conversation.settings, // Keep existing settings
+          ...settings // Override with new values
+        };
+        
+        // Update the conversation with merged settings
+        this.updateCachedConversation(conversationId, { 
+          settings: updatedSettings 
+        });
+      }
       
       console.log('✓ Conversation settings updated');
       
@@ -307,7 +311,7 @@ export class RestConversationService extends BaseConversationService implements 
   async updateConversationStatus(
     conversationId: string,
     status: ConversationStatus
-  ): Promise<void> {
+  ) {
     if (!conversationId?.trim()) {
       throw new ValidationException('Conversation ID is required');
     }
@@ -330,19 +334,19 @@ export class RestConversationService extends BaseConversationService implements 
     }
   }
 
-  async pinConversation(conversationId: string): Promise<void> {
+  async pinConversation(conversationId: string) {
     await this.updateConversationSettings(conversationId, { isPinned: true });
   }
 
-  async unpinConversation(conversationId: string): Promise<void> {
+  async unpinConversation(conversationId: string) {
     await this.updateConversationSettings(conversationId, { isPinned: false });
   }
 
-  async archiveConversation(conversationId: string): Promise<void> {
+  async archiveConversation(conversationId: string) {
     await this.updateConversationStatus(conversationId, ConversationStatus.ARCHIVED);
   }
 
-  async deleteConversation(conversationId: string): Promise<void> {
+  async deleteConversation(conversationId: string) {
     if (!conversationId?.trim()) {
       throw new ValidationException('Conversation ID is required');
     }
@@ -367,7 +371,7 @@ export class RestConversationService extends BaseConversationService implements 
   }
 
   // Private helper method for error handling
-  private handleApiError(error: any, operation: string): void {
+  private handleApiError(error: any, operation: string) {
     console.error(`Failed to ${operation}:`, error);
     
     const status = error?.response?.status;
