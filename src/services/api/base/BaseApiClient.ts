@@ -9,6 +9,7 @@ import axios, {
 
 import { AppConfig, AppLogger } from '../../../config/AppConfig';
 import { AuthService } from '../../AuthService';
+import { logger } from '../../../utils/Logger';
 
 // ==========================================
 // TYPES
@@ -62,7 +63,7 @@ export class BaseApiClient {
       retryDelay: config.retryDelay ?? AppConfig.api.retryDelay,
       enableExponentialBackoff: config.enableExponentialBackoff ?? false,
       maxRetryDelay: config.maxRetryDelay ?? 10000,
-      enableLogging: config.enableLogging,
+      enableLogging: config.enableLogging ?? AppConfig.debug.enabled,
       enableCompression: true,
     };
 
@@ -104,39 +105,29 @@ export class BaseApiClient {
   // INTERCEPTORS
   // ==========================================
 
+
   private setupInterceptors(): void {
     // Request interceptor
     this.axiosInstance.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
-        // Always initialize metadata with all required properties
         const metadata: RequestMetadata = {
           startTime: Date.now(),
           retryCount: 0,
           attemptNumber: 1,
         };
         
-        // Check if this is a retry
-        const existingMetadata = this.requestMetadata.get(config);
-        if (existingMetadata) {
-          metadata.retryCount = existingMetadata.retryCount;
-          metadata.attemptNumber = existingMetadata.attemptNumber;
-        }
-        
         this.requestMetadata.set(config, metadata);
 
-        if (this.config.enableLogging) {
-          AppLogger.network('→ Request:', {
-            method: config.method?.toUpperCase(),
-            url: `${config.baseURL}${config.url}`,
-            attempt: metadata.attemptNumber,
-            headers: this.sanitizeHeaders(config.headers),
-          });
-        }
+        logger.network('API Request', {
+          method: config.method?.toUpperCase(),
+          url: `${config.baseURL}${config.url}`,
+          headers: this.sanitizeHeaders(config.headers),
+        });
 
         return config;
       },
       (error: AxiosError) => {
-        AppLogger.error('Request error:', error.message);
+        logger.error('Request error', error);
         return Promise.reject(error);
       }
     );
@@ -144,61 +135,65 @@ export class BaseApiClient {
     // Response interceptor
     this.axiosInstance.interceptors.response.use(
       (response: AxiosResponse) => {
-        if (this.config.enableLogging) {
-          const metadata = this.requestMetadata.get(response.config as InternalAxiosRequestConfig);
-          // metadata is guaranteed to exist and have all properties
-          const duration = metadata ? Date.now() - metadata.startTime : 0;
+        const metadata = this.requestMetadata.get(response.config as InternalAxiosRequestConfig);
+        const duration = metadata ? Date.now() - metadata.startTime : 0;
 
-          AppLogger.network('← Response:', {
-            status: response.status,
-            url: response.config.url,
-            duration: `${duration}ms`,
-            attempts: metadata?.attemptNumber || 1,
-          });
-        }
+        logger.network('API Response', {
+          status: response.status,
+          url: response.config.url,
+          duration: `${duration}ms`,
+        });
 
         return response;
       },
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig;
 
-        if (!originalRequest) {
-          return Promise.reject(error);
-        }
-
-        // Get or initialize metadata
-        let metadata = this.requestMetadata.get(originalRequest);
-        if (!metadata) {
-          metadata = {
-            startTime: Date.now(),
-            retryCount: 0,
-            attemptNumber: 1,
-          };
-          this.requestMetadata.set(originalRequest, metadata);
-        }
-
-        // Log error
-        AppLogger.error('API Error:', {
-          url: originalRequest.url,
+        logger.error('API Error', error, {
+          url: originalRequest?.url,
           status: error.response?.status,
-          message: error.message,
-          attempt: metadata.attemptNumber,
         });
 
-        // Handle 401 - Token refresh
+        // Handle 401
         if (error.response?.status === 401 && !originalRequest._retry) {
           return this.handleUnauthorized(originalRequest, error);
         }
 
-        // Handle retryable errors
-        if (this.shouldRetry(error) && !originalRequest._retry && metadata.retryCount < this.config.retries) {
-          return this.handleRetry(originalRequest, error, metadata);
+        // Handle retries
+        if (this.shouldRetry(error) && !originalRequest._retry) {
+          const metadata = this.requestMetadata.get(originalRequest);
+          if (metadata && metadata.retryCount < this.config.retries) {
+            return this.handleRetry(originalRequest, error, metadata);
+          }
         }
 
         return Promise.reject(error);
       }
     );
   }
+
+  private async handleRetry(
+    originalRequest: InternalAxiosRequestConfig,
+    error: AxiosError,
+    metadata: RequestMetadata
+  ): Promise<any> {
+    metadata.retryCount++;
+    metadata.attemptNumber++;
+    
+    this.requestMetadata.set(originalRequest, metadata);
+    originalRequest._retry = true;
+
+    const delay = this.calculateDelay(metadata.attemptNumber);
+
+    logger.info(`Retrying request (${metadata.attemptNumber}/${this.config.retries + 1})`, {
+      url: originalRequest.url,
+      delay: `${delay}ms`,
+    });
+
+    await this.delay(delay);
+    return this.axiosInstance(originalRequest);
+  }
+
 
   // ==========================================
   // ERROR HANDLERS
@@ -227,33 +222,7 @@ export class BaseApiClient {
     return Promise.reject(error);
   }
 
-  private async handleRetry(
-    originalRequest: InternalAxiosRequestConfig,
-    error: AxiosError,
-    metadata: RequestMetadata
-  ): Promise<any> {
-    // Increment retry count and attempt number
-    metadata.retryCount++;
-    metadata.attemptNumber++;
-    
-    // Update metadata
-    this.requestMetadata.set(originalRequest, metadata);
-    originalRequest._retry = true;
 
-    // Calculate delay based on configuration
-    const delay = this.config.enableExponentialBackoff
-      ? this.calculateExponentialDelay(metadata.attemptNumber)
-      : this.config.retryDelay;
-
-    AppLogger.info(`Retrying request (attempt ${metadata.attemptNumber}/${this.config.retries + 1})`, {
-      url: originalRequest.url,
-      delay: `${delay}ms`,
-      nextAttemptIn: `${delay}ms`,
-    });
-
-    await this.delay(delay);
-    return this.axiosInstance(originalRequest);
-  }
 
   private shouldRetry(error: AxiosError): boolean {
     // Determine if the error is retryable based on status code
