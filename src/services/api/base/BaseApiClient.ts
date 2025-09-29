@@ -1,4 +1,4 @@
-// src/services/api/base/BaseApiClient.ts - Merged comprehensive API client
+// src/services/api/base/BaseApiClient.ts - Updated to use AppConfig properly
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -10,9 +10,9 @@ import axios, {
 import { AppConfig, AppLogger } from '../../../config/AppConfig';
 import { AuthService } from '../../../services/AuthService';
 
-// Platform detection
-const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
-const Platform = isNodeEnvironment ? { OS: 'node' } : require('react-native').Platform;
+// Platform detection from AppConfig
+const Platform = AppConfig.platform;
+const isNodeEnvironment = AppConfig.isNodeEnvironment;
 
 // Request metadata interface
 interface RequestMetadata {
@@ -78,9 +78,10 @@ const defaultRetryCondition = (error: AxiosError): boolean => {
 
 /**
  * Base API Client Configuration
+ * This interface is for internal use - external code should use AppConfig directly
  */
 export interface BaseApiClientConfig {
-  baseUrl: string;
+  baseUrl?: string;
   token?: string | null;
   headers?: Record<string, string>;
   timeout?: number;
@@ -92,7 +93,7 @@ export interface BaseApiClientConfig {
 }
 
 /**
- * Enhanced Base API Client with all features from Client.ts
+ * Enhanced Base API Client with AppConfig integration
  * Provides authentication, error handling, retry logic, and logging
  */
 export class BaseApiClient {
@@ -101,18 +102,66 @@ export class BaseApiClient {
   protected config: BaseApiClientConfig;
   private reconnectAttempts = 0;
   
-  constructor(config: BaseApiClientConfig) {
-    this.config = {
-      timeout: AppConfig.api.timeout,
-      retries: AppConfig.api.retries,
-      retryDelay: AppConfig.api.retryDelay,
-      enableLogging: AppConfig.debug?.enabled,
-      enableCompression: AppConfig.performance?.enableDataCompression,
-      ...config
-    };
+  constructor(config: BaseApiClientConfig = {}) {
+    // Merge with AppConfig defaults based on client type
+    this.config = this.mergeWithAppConfig(config);
     
     this.token = config.token || null;
     this.apiClient = this.createClient();
+  }
+
+  /**
+   * Merge configuration with AppConfig defaults
+   */
+  private mergeWithAppConfig(config: BaseApiClientConfig): BaseApiClientConfig {
+    let defaults: Partial<BaseApiClientConfig> = {};
+    
+    switch (config.clientType) {
+      case 'chat':
+        defaults = {
+          baseUrl: AppConfig.chat.baseUrl,
+          timeout: AppConfig.chat.timeout,
+          retries: AppConfig.api.retries,
+          retryDelay: AppConfig.api.retryDelay,
+          enableLogging: AppConfig.debug.enabled,
+          enableCompression: AppConfig.performance.enableDataCompression,
+        };
+        break;
+        
+      case 'notification':
+        defaults = {
+          baseUrl: AppConfig.notification.baseUrl,
+          timeout: AppConfig.notification.timeout,
+          retries: AppConfig.api.retries,
+          retryDelay: AppConfig.api.retryDelay,
+          enableLogging: AppConfig.debug.enabled,
+          enableCompression: AppConfig.performance.enableDataCompression,
+        };
+        break;
+        
+      case 'formdata':
+        defaults = {
+          baseUrl: AppConfig.api.baseUrl,
+          timeout: AppConfig.chat.uploadTimeout || AppConfig.api.timeout,
+          retries: AppConfig.api.retries,
+          retryDelay: AppConfig.api.retryDelay,
+          enableLogging: AppConfig.debug.enabled,
+          enableCompression: false, // No compression for form data
+        };
+        break;
+        
+      default:
+        defaults = {
+          baseUrl: AppConfig.api.baseUrl,
+          timeout: AppConfig.api.timeout,
+          retries: AppConfig.api.retries,
+          retryDelay: AppConfig.api.retryDelay,
+          enableLogging: AppConfig.debug.enabled,
+          enableCompression: AppConfig.performance.enableDataCompression,
+        };
+    }
+    
+    return { ...defaults, ...config };
   }
 
   /**
@@ -169,7 +218,7 @@ export class BaseApiClient {
         setRequestMetadata(config, { startTime: Date.now() });
 
         if (this.config.enableLogging) {
-          AppLogger.info('API Request:', {
+          AppLogger.network('API Request:', {
             method: config.method?.toUpperCase(),
             url: config.url,
             baseURL: config.baseURL,
@@ -199,7 +248,7 @@ export class BaseApiClient {
           const metadata = getRequestMetadata(response.config as InternalAxiosRequestConfig);
           const duration = metadata ? Date.now() - metadata.startTime : 0;
 
-          AppLogger.info('API Response:', {
+          AppLogger.network('API Response:', {
             method: response.config.method?.toUpperCase(),
             url: response.config.url,
             status: response.status,
@@ -272,14 +321,14 @@ export class BaseApiClient {
   ): Promise<AxiosResponse> {
     try {
       await new Promise<void>(resolve =>
-        setTimeout(() => resolve(), this.config.retryDelay || 2000)
+        setTimeout(() => resolve(), this.config.retryDelay || AppConfig.api.retryDelay)
       );
 
       const metadata = getRequestMetadata(originalRequest);
       const retryCount = (metadata?.retryCount || 0) + 1;
       updateRequestMetadata(originalRequest, { retryCount });
 
-      if (retryCount <= (this.config.retries || 2)) {
+      if (retryCount <= (this.config.retries || AppConfig.api.retries)) {
         AppLogger.info(`Retrying request (${retryCount}/${this.config.retries}):`, {
           url: originalRequest.url,
           method: originalRequest.method?.toUpperCase(),
@@ -321,7 +370,7 @@ export class BaseApiClient {
    * Safe error logging helper
    */
   protected safeLogError(context: string, error: any, additionalData?: any): void {
-    console.error(`❌ [${this.constructor.name}] ${context}:`, {
+    AppLogger.error(`[${this.constructor.name}] ${context}:`, {
       message: error?.message || 'Unknown error',
       name: error?.name || 'Error',
       status: error?.response?.status,
@@ -491,7 +540,7 @@ export class BaseApiClient {
   }
 }
 
-// Factory functions for creating specific client types
+// Factory functions for creating specific client types - all using AppConfig
 export function createApiClient(token?: string): BaseApiClient {
   return new BaseApiClient({
     baseUrl: AppConfig.api.baseUrl,

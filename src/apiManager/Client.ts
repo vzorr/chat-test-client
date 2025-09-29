@@ -1,4 +1,4 @@
-// Client.ts - Fixed for both React Native and Node.js environments
+// Client.ts - Updated to use AppConfig properly
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -7,12 +7,11 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 
-import {AppConfig, AppLogger} from '../config/AppConfig';
-import {AuthService} from '../services/AuthService';
+import { AppConfig, AppLogger } from '../config/AppConfig';
+import { AuthService } from '../services/AuthService';
 
-// Platform detection
-const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
-const Platform = isNodeEnvironment ? { OS: 'node' } : require('react-native').Platform;
+// Platform detection using AppConfig
+const Platform = AppConfig.platform;
 
 // Request metadata interface
 interface RequestMetadata {
@@ -95,7 +94,7 @@ const handleRetry = async (
   error: AxiosError,
 ): Promise<AxiosResponse> => {
   try {
-    // Wait before retrying
+    // Wait before retrying using AppConfig retry delay
     await new Promise<void>(resolve =>
       setTimeout(() => resolve(), AppConfig.api.retryDelay),
     );
@@ -158,7 +157,7 @@ const createClient = (
     };
   }
 
-  // Add performance configuration
+  // Add performance configuration from AppConfig
   if (AppConfig.performance?.enableDataCompression) {
     config.headers!['Accept-Encoding'] = 'gzip, deflate';
   }
@@ -286,24 +285,24 @@ const createClient = (
   return axiosInstance;
 };
 
-// Main API client with authorization
+// Main API client with authorization - using AppConfig
 export const client = (token: string | null = null): AxiosInstance => {
   return createClient(AppConfig.api.baseUrl, token);
 };
 
-// Client without authorization headers
+// Client without authorization headers - using AppConfig
 export const client1 = (token: string | null = null): AxiosInstance => {
   return createClient(AppConfig.api.baseUrl, token);
 };
 
-// OTP client
+// OTP client - using AppConfig
 export const otpClient = (token: string | null = null): AxiosInstance => {
   return createClient(AppConfig.api.baseUrl, null, {
     'x-auth-otp': token || '',
   });
 };
 
-// Client for form data with enhanced upload configuration
+// Client for form data with enhanced upload configuration - using AppConfig
 export const ClientFormData = (token: string | null = null): AxiosInstance => {
   return createClient(
     AppConfig.api.baseUrl,
@@ -315,7 +314,7 @@ export const ClientFormData = (token: string | null = null): AxiosInstance => {
   );
 };
 
-// Notification client
+// Notification client - using AppConfig
 export const notificationClient = (
   token: string | null = null,
 ): AxiosInstance => {
@@ -327,7 +326,7 @@ export const notificationClient = (
   );
 };
 
-// Chat client
+// Chat client - using AppConfig
 export const chatClient = (token: string | null = null): AxiosInstance => {
   return createClient(
     AppConfig.chat.baseUrl,
@@ -337,7 +336,7 @@ export const chatClient = (token: string | null = null): AxiosInstance => {
   );
 };
 
-// Enhanced Chat Service with proper FormData handling
+// Enhanced Chat Service with proper FormData handling - using AppConfig
 export const ChatService = {
   getClient: (token: string | null = null): AxiosInstance => {
     return createClient(AppConfig.chat.baseUrl, token);
@@ -418,14 +417,9 @@ export const ChatService = {
     file: any,
     type: 'image' | 'audio' | 'file',
   ): Promise<AxiosResponse> => {
-    // Validate file size
-    const maxSizes = {
-      image: 5 * 1024 * 1024, // 5MB
-      audio: 15 * 1024 * 1024, // 15MB
-      file: 10 * 1024 * 1024, // 10MB
-    };
-
-    const maxSize = maxSizes[type];
+    // Validate file size using AppConfig
+    const maxSize = AppConfig.helpers.getMaxFileSize(type);
+    
     if (file.size && file.size > maxSize) {
       throw new Error(
         `File size (${file.size}) exceeds maximum allowed size (${maxSize}) for ${type} files`,
@@ -433,7 +427,7 @@ export const ChatService = {
     }
 
     // Handle FormData differently for Node.js vs React Native
-    if (isNodeEnvironment) {
+    if (AppConfig.isNodeEnvironment) {
       // Node.js environment - use standard FormData
       const FormData = require('form-data');
       const fs = require('fs');
@@ -575,7 +569,7 @@ export const ChatService = {
   },
 };
 
-// Enhanced notification client with specialized functions
+// Enhanced notification client with specialized functions - using AppConfig
 export const NotificationService = {
   getClient: (token: string | null = null): AxiosInstance => {
     return notificationClient(token);
@@ -632,20 +626,20 @@ export const NotificationService = {
   },
 };
 
-// Export environment info for troubleshooting
+// Export environment info for troubleshooting - using AppConfig
 export const API_ENV = {
   environment: AppConfig.environment,
   currentBaseUrl: AppConfig.api.baseUrl,
   currentSocketUrl: AppConfig.socket.url,
   isProduction: AppConfig.isProduction,
   isDevelopment: AppConfig.isDevelopment,
-  isStaging: AppConfig.isStaging || false,
+  isStaging: AppConfig.isStaging,
   features: AppConfig.features,
   debug: AppConfig.debug,
   performance: AppConfig.performance,
 };
 
-// Export backward compatibility constants
+// Export backward compatibility constants - using AppConfig
 export const BASE_API_URL_STAGING = AppConfig.api.baseUrl;
 export const BASE_API_URL_PRODUCTION = AppConfig.api.baseUrl;
 export const BASE_SOCKET_URL = AppConfig.socket.url;

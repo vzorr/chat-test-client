@@ -1,10 +1,10 @@
 // src/services/implementations/offline/OfflineQueueService.ts
-import { IOfflineQueueService, IStorageService } from '../../interfaces';
-import { Message, MessageStatus, QueuedMessage } from '../../../types/chat';
+import { IOfflineQueueService, IStorageService } from '../interfaces';
+import { Message, MessageStatus, QueuedMessage } from '../../types/chat';
 
 export class OfflineQueueService implements IOfflineQueueService {
   private queue: Map<string, QueuedMessage> = new Map();
-  private isProcessing: boolean = false;
+  private processingState: boolean = false; // Renamed from isProcessing to avoid conflict
   private readonly STORAGE_KEY = 'offline_message_queue';
   private readonly MAX_RETRIES = 3;
   private readonly MAX_QUEUE_SIZE = 100;
@@ -17,9 +17,12 @@ export class OfflineQueueService implements IOfflineQueueService {
     this.loadQueue(); // Load queue on initialization
   }
 
+  /**
+   * Add a message to the offline queue
+   */
   async queueMessage(message: Message): Promise<void> {
     if (this.queue.size >= this.MAX_QUEUE_SIZE) {
-      console.warn('Offline queue is full, removing oldest message');
+      console.warn('⚠️ Offline queue is full, removing oldest message');
       const oldestKey = Array.from(this.queue.keys())[0];
       this.queue.delete(oldestKey);
     }
@@ -43,13 +46,16 @@ export class OfflineQueueService implements IOfflineQueueService {
     console.log(`📋 Message queued for offline sending. Queue size: ${this.queue.size}`);
   }
 
+  /**
+   * Process all queued messages
+   */
   async processQueue(): Promise<void> {
-    if (this.isProcessing || this.queue.size === 0) {
+    if (this.processingState || this.queue.size === 0) {
       return;
     }
 
     console.log(`📤 Processing ${this.queue.size} offline messages...`);
-    this.isProcessing = true;
+    this.processingState = true;
 
     try {
       const sortedMessages = this.getSortedMessages();
@@ -59,14 +65,14 @@ export class OfflineQueueService implements IOfflineQueueService {
         try {
           // Check if message hasn't expired
           if (this.isMessageExpired(queuedMessage)) {
-            console.warn('Message expired, removing from queue:', clientTempId);
+            console.warn('⏰ Message expired, removing from queue:', clientTempId);
             processedIds.push(clientTempId);
             continue;
           }
 
           // Check retry count
           if (queuedMessage.retryCount >= queuedMessage.maxRetries) {
-            console.error('Max retries reached for message:', clientTempId);
+            console.error('❌ Max retries reached for message:', clientTempId);
             this.updateMessageStatus(queuedMessage.message, MessageStatus.FAILED);
             processedIds.push(clientTempId);
             continue;
@@ -74,7 +80,7 @@ export class OfflineQueueService implements IOfflineQueueService {
 
           // Try to send the message
           if (this.sendMessageFn) {
-            console.log(`Sending queued message (attempt ${queuedMessage.retryCount + 1}/${queuedMessage.maxRetries}):`, clientTempId);
+            console.log(`📨 Sending queued message (attempt ${queuedMessage.retryCount + 1}/${queuedMessage.maxRetries}):`, clientTempId);
             
             await this.sendMessageFn(queuedMessage.message);
             
@@ -84,7 +90,7 @@ export class OfflineQueueService implements IOfflineQueueService {
           }
 
         } catch (error) {
-          console.error('Failed to send queued message:', error);
+          console.error('❌ Failed to send queued message:', error);
           
           // Update retry count
           queuedMessage.retryCount++;
@@ -111,20 +117,29 @@ export class OfflineQueueService implements IOfflineQueueService {
       console.log(`✓ Queue processing complete. Remaining: ${this.queue.size}`);
 
     } finally {
-      this.isProcessing = false;
+      this.processingState = false;
     }
   }
 
+  /**
+   * Get all queued messages
+   */
   getQueuedMessages(): Message[] {
     return Array.from(this.queue.values()).map(q => q.message);
   }
 
+  /**
+   * Clear all messages from the queue
+   */
   async clearQueue(): Promise<void> {
     this.queue.clear();
     await this.storageService.remove(this.STORAGE_KEY);
     console.log('🗑️ Offline queue cleared');
   }
 
+  /**
+   * Remove a specific message from the queue
+   */
   async removeFromQueue(clientTempId: string): Promise<void> {
     if (this.queue.delete(clientTempId)) {
       await this.saveQueue();
@@ -132,14 +147,24 @@ export class OfflineQueueService implements IOfflineQueueService {
     }
   }
 
+  /**
+   * Get the current queue size
+   */
   getQueueSize(): number {
     return this.queue.size;
   }
 
+  /**
+   * Check if the queue is currently being processed
+   * This is the public method required by the interface
+   */
   isProcessing(): boolean {
-    return this.isProcessing;
+    return this.processingState;
   }
 
+  /**
+   * Save queue to storage
+   */
   async saveQueue(): Promise<void> {
     try {
       if (this.queue.size === 0) {
@@ -156,6 +181,9 @@ export class OfflineQueueService implements IOfflineQueueService {
     }
   }
 
+  /**
+   * Load queue from storage
+   */
   async loadQueue(): Promise<void> {
     try {
       const queueData = await this.storageService.get<Array<[string, QueuedMessage]>>(this.STORAGE_KEY);
@@ -177,7 +205,7 @@ export class OfflineQueueService implements IOfflineQueueService {
 
       console.log(`📥 Loaded ${this.queue.size} messages from offline queue`);
       
-      // Clean up expired messages
+      // Clean up expired messages if any were skipped
       if (this.queue.size < queueData.length) {
         await this.saveQueue();
       }
@@ -189,12 +217,17 @@ export class OfflineQueueService implements IOfflineQueueService {
     }
   }
 
-  // Set the send function for processing
+  /**
+   * Set the function used to send messages
+   * This allows dependency injection of the send logic
+   */
   setSendFunction(sendFn: (message: Message) => Promise<Message>): void {
     this.sendMessageFn = sendFn;
   }
 
-  // Get queue status
+  /**
+   * Get detailed queue status
+   */
   getQueueStatus(): {
     count: number;
     messages: Array<{
@@ -210,7 +243,7 @@ export class OfflineQueueService implements IOfflineQueueService {
     const messages = Array.from(this.queue.entries()).map(([clientTempId, queued]) => ({
       clientTempId,
       conversationId: queued.message.conversationId,
-      content: queued.message.content.substring(0, 50) + '...',
+      content: queued.message.content.substring(0, 50) + (queued.message.content.length > 50 ? '...' : ''),
       timestamp: queued.message.timestamp,
       retryCount: queued.retryCount,
       age: now - queued.addedAt
@@ -222,7 +255,9 @@ export class OfflineQueueService implements IOfflineQueueService {
     };
   }
 
-  // Clean up expired messages
+  /**
+   * Clean up expired messages
+   */
   async cleanupExpiredMessages(): Promise<void> {
     const initialSize = this.queue.size;
     const expiredIds: string[] = [];
@@ -243,8 +278,73 @@ export class OfflineQueueService implements IOfflineQueueService {
     }
   }
 
-  // Private helper methods
-  
+  /**
+   * Process a single message from the queue
+   */
+  async processSingleMessage(clientTempId: string): Promise<boolean> {
+    const queuedMessage = this.queue.get(clientTempId);
+    
+    if (!queuedMessage) {
+      return false;
+    }
+
+    if (!this.sendMessageFn) {
+      console.error('No send function configured');
+      return false;
+    }
+
+    try {
+      await this.sendMessageFn(queuedMessage.message);
+      this.queue.delete(clientTempId);
+      await this.saveQueue();
+      return true;
+    } catch (error) {
+      console.error('Failed to send single message:', error);
+      
+      queuedMessage.retryCount++;
+      if (queuedMessage.retryCount >= queuedMessage.maxRetries) {
+        this.updateMessageStatus(queuedMessage.message, MessageStatus.FAILED);
+        this.queue.delete(clientTempId);
+        await this.saveQueue();
+      }
+      
+      return false;
+    }
+  }
+
+  /**
+   * Get messages that have failed (reached max retries)
+   */
+  getFailedMessages(): Message[] {
+    return Array.from(this.queue.values())
+      .filter(q => q.retryCount >= q.maxRetries)
+      .map(q => q.message);
+  }
+
+  /**
+   * Retry all failed messages (reset their retry count)
+   */
+  async retryFailedMessages(): Promise<void> {
+    let retriedCount = 0;
+    
+    for (const [clientTempId, queuedMessage] of this.queue.entries()) {
+      if (queuedMessage.retryCount >= queuedMessage.maxRetries) {
+        queuedMessage.retryCount = 0;
+        queuedMessage.message.status = MessageStatus.QUEUED;
+        retriedCount++;
+      }
+    }
+
+    if (retriedCount > 0) {
+      await this.saveQueue();
+      console.log(`🔄 Reset ${retriedCount} failed messages for retry`);
+    }
+  }
+
+  // ==========================================
+  // PRIVATE HELPER METHODS
+  // ==========================================
+
   private getSortedMessages(): Array<[string, QueuedMessage]> {
     return Array.from(this.queue.entries())
       .sort(([, a], [, b]) => a.addedAt - b.addedAt);
@@ -268,5 +368,38 @@ export class OfflineQueueService implements IOfflineQueueService {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get statistics about the queue
+   */
+  getStatistics(): {
+    totalQueued: number;
+    processing: boolean;
+    failedCount: number;
+    oldestMessageAge: number | null;
+    averageRetryCount: number;
+  } {
+    const failedCount = this.getFailedMessages().length;
+    let oldestAge: number | null = null;
+    let totalRetries = 0;
+
+    const now = Date.now();
+    
+    for (const [, queuedMessage] of this.queue.entries()) {
+      const age = now - queuedMessage.addedAt;
+      if (oldestAge === null || age > oldestAge) {
+        oldestAge = age;
+      }
+      totalRetries += queuedMessage.retryCount;
+    }
+
+    return {
+      totalQueued: this.queue.size,
+      processing: this.processingState,
+      failedCount,
+      oldestMessageAge: oldestAge,
+      averageRetryCount: this.queue.size > 0 ? totalRetries / this.queue.size : 0
+    };
   }
 }

@@ -1,9 +1,14 @@
-// AppConfig.ts - Environment-based Configuration Management
-import { Platform } from 'react-native';
+// AppConfig.ts - Validated Environment-based Configuration Management
 import * as dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+
+// Platform detection - properly handle both Node and React Native
+const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
+const Platform = isNodeEnvironment 
+  ? { OS: 'node', Version: process.version } 
+  : require('react-native').Platform;
 
 // Environment types
 type Environment = 'development' | 'staging' | 'production';
@@ -16,16 +21,18 @@ const getCurrentEnvironment = (): Environment => {
 
 const ENVIRONMENT = getCurrentEnvironment();
 
-// Socket configuration from environment
+// ==========================================
+// SOCKET CONFIGURATION
+// ==========================================
 export const SocketConfig = {
   url: process.env.SERVER_URL || 'https://myusta.al',
   path: process.env.SOCKET_PATH || '/chat-backend/socket.io/',
   transports: (process.env.SOCKET_TRANSPORTS?.split(',') || ['websocket', 'polling']) as ('polling' | 'websocket')[],
-  timeout: parseInt(process.env.SOCKET_TIMEOUT || '30000'),
-  reconnection: process.env.SOCKET_RECONNECTION === 'true',
-  reconnectionAttempts: parseInt(process.env.SOCKET_RECONNECTION_ATTEMPTS || '5'),
-  reconnectionDelay: parseInt(process.env.SOCKET_RECONNECTION_DELAY || '2000'),
-  reconnectionDelayMax: parseInt(process.env.SOCKET_RECONNECTION_DELAY_MAX || '10000'),
+  timeout: parseInt(process.env.SOCKET_TIMEOUT || '30000', 10),
+  reconnection: process.env.SOCKET_RECONNECTION !== 'false',
+  reconnectionAttempts: parseInt(process.env.SOCKET_RECONNECTION_ATTEMPTS || '5', 10),
+  reconnectionDelay: parseInt(process.env.SOCKET_RECONNECTION_DELAY || '2000', 10),
+  reconnectionDelayMax: parseInt(process.env.SOCKET_RECONNECTION_DELAY_MAX || '10000', 10),
   randomizationFactor: 0.5,
   forceNew: true,
   autoConnect: true,
@@ -33,26 +40,32 @@ export const SocketConfig = {
   rememberUpgrade: true,
   withCredentials: false,
   ackTimeout: 10000,
-  retries: parseInt(process.env.MAX_RETRIES || '3'),
+  retries: parseInt(process.env.MAX_RETRIES || '3', 10),
   closeOnBeforeunload: true,
   enableLogging: process.env.ENABLE_LOGGING === 'true',
-  pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL || '25000'),
-  pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT || '5000'),
+  pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL || '25000', 10),
+  pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT || '5000', 10),
 };
 
-// API configuration
+// ==========================================
+// API CONFIGURATION
+// ==========================================
 export const ApiConfig = {
-  baseUrl: process.env.SERVER_URL ? `${process.env.SERVER_URL}/myusta-backend/api/` : 'https://myusta.al/myusta-backend/api/',
-  timeout: parseInt(process.env.MESSAGE_TIMEOUT || '30000'),
-  retries: parseInt(process.env.MAX_RETRIES || '2'),
-  retryDelay: parseInt(process.env.RETRY_DELAY || '2000'),
+  baseUrl: process.env.SERVER_URL 
+    ? `${process.env.SERVER_URL}/myusta-backend/api/` 
+    : 'https://myusta.al/myusta-backend/api/',
+  timeout: parseInt(process.env.MESSAGE_TIMEOUT || '30000', 10),
+  retries: parseInt(process.env.MAX_RETRIES || '2', 10),
+  retryDelay: parseInt(process.env.RETRY_DELAY || '2000', 10),
   enableLogging: process.env.ENABLE_LOGGING === 'true',
 };
 
-// Chat configuration
+// ==========================================
+// CHAT CONFIGURATION
+// ==========================================
 export const ChatConfig = {
   baseUrl: process.env.CHAT_API_URL || 'https://myusta.al/chat-backend/api/v1/',
-  timeout: parseInt(process.env.MESSAGE_TIMEOUT || '30000'),
+  timeout: parseInt(process.env.MESSAGE_TIMEOUT || '30000', 10),
   uploadTimeout: 60000,
   maxFileSize: 10 * 1024 * 1024,
   maxImageSize: 5 * 1024 * 1024,
@@ -65,19 +78,23 @@ export const ChatConfig = {
   messageCacheSize: 500,
 };
 
-// Notification configuration
+// ==========================================
+// NOTIFICATION CONFIGURATION
+// ==========================================
 export const NotificationConfig = {
   baseUrl: process.env.CHAT_API_URL || 'https://myusta.al/chat-backend/api/v1/',
   timeout: 30000,
-  fcmEnabled: true,
-  pushNotificationsEnabled: true,
+  fcmEnabled: process.env.ENABLE_PUSH_NOTIFICATIONS === 'true',
+  pushNotificationsEnabled: process.env.ENABLE_PUSH_NOTIFICATIONS === 'true',
   soundEnabled: true,
   vibrationEnabled: true,
   badgeEnabled: true,
   categoryId: 'myusta_notifications',
 };
 
-// Google services configuration
+// ==========================================
+// GOOGLE SERVICES CONFIGURATION
+// ==========================================
 export const GoogleConfig = {
   placesApiKey: 'AIzaSyDK6xDsgrab0VzbnLeEVT1rJHsz2k1mA1c',
   locationApiKey: 'AIzaSyB8ODrHnGGYlUvHJ5omefoaIEM_M9Je0bg',
@@ -88,16 +105,20 @@ export const GoogleConfig = {
   locationTimeout: 10000,
 };
 
-// Security configuration
+// ==========================================
+// SECURITY CONFIGURATION
+// ==========================================
 export const SecurityConfig = {
   enableSSLPinning: ENVIRONMENT === 'production',
   enableCertificateValidation: ENVIRONMENT === 'production',
   allowSelfSignedCerts: ENVIRONMENT !== 'production',
   apiKeyRotationEnabled: ENVIRONMENT === 'production',
-  tokenRefreshThreshold: 600000,
+  tokenRefreshThreshold: 600000, // 10 minutes
 };
 
-// Performance configuration
+// ==========================================
+// PERFORMANCE CONFIGURATION
+// ==========================================
 export const PerformanceConfig = {
   enableImageCaching: true,
   imageCacheSize: 300,
@@ -107,13 +128,15 @@ export const PerformanceConfig = {
   enableRequestDeduplication: true,
 };
 
-// Debug configuration
+// ==========================================
+// DEBUG CONFIGURATION
+// ==========================================
 export const DebugConfig = {
   enabled: process.env.ENABLE_LOGGING === 'true',
   enableLogging: process.env.ENABLE_LOGGING === 'true',
   enableVerboseLogging: process.env.ENABLE_VERBOSE_LOGGING === 'true',
-  enableNetworkLogging: process.env.ENABLE_LOGGING === 'true',
-  enableSocketLogging: process.env.ENABLE_LOGGING === 'true',
+  enableNetworkLogging: process.env.ENABLE_NETWORK_LOGGING === 'true',
+  enableSocketLogging: process.env.ENABLE_SOCKET_LOGGING === 'true',
   enableReduxLogging: false,
   enablePerformanceLogging: false,
   logLevel: ENVIRONMENT === 'production' ? 'error' as const : 'debug' as const,
@@ -121,14 +144,16 @@ export const DebugConfig = {
   maxLogFileSize: 5 * 1024 * 1024,
 };
 
-// Feature flags
+// ==========================================
+// FEATURE FLAGS
+// ==========================================
 export const FeatureFlags = {
-  enableOfflineMode: true,
+  enableOfflineMode: process.env.ENABLE_OFFLINE_MODE !== 'false',
   enableBetaFeatures: ENVIRONMENT !== 'production',
   enablePerformanceMonitoring: true,
   enableCrashReporting: ENVIRONMENT === 'production',
   enableAnalytics: ENVIRONMENT === 'production',
-  enableBiometricAuth: true,
+  enableBiometricAuth: process.env.ENABLE_BIOMETRIC_AUTH === 'true',
   enableDarkMode: true,
   enableVoiceMessages: true,
   enableVideoMessages: false,
@@ -138,7 +163,9 @@ export const FeatureFlags = {
   enableMessageReactions: true,
 };
 
-// Logger utility
+// ==========================================
+// LOGGER UTILITY
+// ==========================================
 export const AppLogger = {
   debug: (...args: any[]): void => {
     if (DebugConfig.enableLogging && DebugConfig.logLevel === 'debug') {
@@ -177,15 +204,23 @@ export const AppLogger = {
   },
 };
 
-// Helper functions
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
 export const ConfigHelpers = {
   isFeatureEnabled: (featureName: keyof typeof FeatureFlags): boolean =>
     FeatureFlags[featureName] || false,
+  
   getApiTimeout: (): number => ApiConfig.timeout,
+  
   getSocketConfig: () => SocketConfig,
+  
   getChatConfig: () => ChatConfig,
+  
   shouldLogNetwork: (): boolean => DebugConfig.enableNetworkLogging,
+  
   shouldLogSocket: (): boolean => DebugConfig.enableSocketLogging,
+  
   getMaxFileSize: (type: 'file' | 'image' | 'audio' = 'file'): number => {
     switch (type) {
       case 'image':
@@ -196,6 +231,7 @@ export const ConfigHelpers = {
         return ChatConfig.maxFileSize;
     }
   },
+  
   getSupportedFileTypes: (type: 'file' | 'image' | 'audio' = 'file'): string[] => {
     switch (type) {
       case 'image':
@@ -206,9 +242,26 @@ export const ConfigHelpers = {
         return ChatConfig.supportedFileTypes;
     }
   },
+  
+  getUserConfig: () => ({
+    userId: process.env.USER_ID,
+    userName: process.env.USER_NAME,
+    userEmail: process.env.USER_EMAIL,
+    userPhone: process.env.USER_PHONE,
+    userRole: process.env.USER_ROLE,
+  }),
+  
+  getReceiverConfig: () => ({
+    receiverId: process.env.RECEIVER_ID,
+    receiverName: process.env.RECEIVER_NAME,
+  }),
+  
+  getAuthToken: (): string => process.env.AUTH_TOKEN || '',
 };
 
-// Main AppConfig interface
+// ==========================================
+// MAIN APPCONFIG INTERFACE
+// ==========================================
 interface AppConfigType {
   environment: Environment;
   isDevelopment: boolean;
@@ -226,9 +279,13 @@ interface AppConfigType {
   logger: typeof AppLogger;
   helpers: typeof ConfigHelpers;
   getCurrentEnvironment: () => Environment;
+  platform: typeof Platform;
+  isNodeEnvironment: boolean;
 }
 
-// Export current configuration
+// ==========================================
+// EXPORT CURRENT CONFIGURATION
+// ==========================================
 export const AppConfig: AppConfigType = {
   environment: ENVIRONMENT,
   isDevelopment: ENVIRONMENT === 'development',
@@ -246,9 +303,13 @@ export const AppConfig: AppConfigType = {
   logger: AppLogger,
   helpers: ConfigHelpers,
   getCurrentEnvironment,
+  platform: Platform,
+  isNodeEnvironment,
 };
 
-// Legacy exports for backward compatibility
+// ==========================================
+// LEGACY EXPORTS FOR BACKWARD COMPATIBILITY
+// ==========================================
 export const BASE_API_URL = ApiConfig.baseUrl;
 export const BASE_SOCKET_URL = SocketConfig.url;
 export const BASE_CHAT_URL = ChatConfig.baseUrl;
@@ -257,13 +318,87 @@ export const GOOGLE_PLACES_URL = GoogleConfig.placesUrl;
 export const GOOGLE_PLACES_API_KEY = GoogleConfig.placesApiKey;
 export const GOOGLE_LOCATION_API_KEY = GoogleConfig.locationApiKey;
 
-// Initialize configuration logging
+// ==========================================
+// INITIALIZATION LOGGING
+// ==========================================
 if (DebugConfig.enableLogging) {
-  AppLogger.info(`🚀 App initialized with environment: ${ENVIRONMENT}`);
+  AppLogger.info('🚀 App Configuration Initialized');
+  AppLogger.info(`📱 Platform: ${Platform.OS} ${Platform.Version || ''}`);
+  AppLogger.info(`🌍 Environment: ${ENVIRONMENT}`);
   AppLogger.info(`📡 API Base URL: ${ApiConfig.baseUrl}`);
   AppLogger.info(`🔌 Socket URL: ${SocketConfig.url}${SocketConfig.path}`);
-  AppLogger.info(`💬 Chat URL: ${ChatConfig.baseUrl}`);
+  AppLogger.info(`💬 Chat API URL: ${ChatConfig.baseUrl}`);
   AppLogger.info(`🔔 Notification URL: ${NotificationConfig.baseUrl}`);
+  AppLogger.info(`🔐 Auth Token: ${process.env.AUTH_TOKEN ? 'Present' : 'Missing'}`);
+  AppLogger.info(`👤 User ID: ${process.env.USER_ID || 'Not set'}`);
+  AppLogger.info(`🔧 Debug Mode: ${DebugConfig.enabled ? 'Enabled' : 'Disabled'}`);
+  AppLogger.info(`📴 Offline Mode: ${FeatureFlags.enableOfflineMode ? 'Enabled' : 'Disabled'}`);
 }
 
+// ==========================================
+// VALIDATION ON STARTUP
+// ==========================================
+const validateConfig = (): void => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Check required environment variables for test client
+  if (!process.env.AUTH_TOKEN) {
+    warnings.push('AUTH_TOKEN is not set - authentication may fail');
+  }
+  
+  if (!process.env.USER_ID) {
+    warnings.push('USER_ID is not set - using defaults');
+  }
+  
+  if (!process.env.RECEIVER_ID) {
+    warnings.push('RECEIVER_ID is not set - messaging may fail');
+  }
+
+  // Validate URLs
+  try {
+    new URL(SocketConfig.url);
+  } catch {
+    errors.push(`Invalid SERVER_URL: ${SocketConfig.url}`);
+  }
+
+  try {
+    new URL(ChatConfig.baseUrl);
+  } catch {
+    errors.push(`Invalid CHAT_API_URL: ${ChatConfig.baseUrl}`);
+  }
+
+  // Validate numeric values
+  if (isNaN(SocketConfig.timeout) || SocketConfig.timeout <= 0) {
+    errors.push(`Invalid SOCKET_TIMEOUT: ${process.env.SOCKET_TIMEOUT}`);
+  }
+
+  if (isNaN(ApiConfig.retries) || ApiConfig.retries < 0) {
+    errors.push(`Invalid MAX_RETRIES: ${process.env.MAX_RETRIES}`);
+  }
+
+  // Log validation results
+  if (errors.length > 0) {
+    console.error('❌ Configuration Errors:');
+    errors.forEach(error => console.error(`  - ${error}`));
+  }
+
+  if (warnings.length > 0 && DebugConfig.enableLogging) {
+    console.warn('⚠️  Configuration Warnings:');
+    warnings.forEach(warning => console.warn(`  - ${warning}`));
+  }
+
+  if (errors.length === 0 && DebugConfig.enableLogging) {
+    AppLogger.info('✅ Configuration validation passed');
+  }
+};
+
+// Run validation on startup
+if (ENVIRONMENT === 'development') {
+  validateConfig();
+}
+
+// ==========================================
+// DEFAULT EXPORT
+// ==========================================
 export default AppConfig;
