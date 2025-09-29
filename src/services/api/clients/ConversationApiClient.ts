@@ -1,5 +1,5 @@
 // src/services/api/clients/ConversationApiClient.ts
-import { BaseApiClient } from '../base/BaseApiClient';
+import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { 
   ServerConversation,
   ConversationSettings,
@@ -11,11 +11,20 @@ import {
   UserRole,
   Message
 } from '../../../types/chat';
+import { AppConfig } from '../../../config/AppConfig';
 
 /**
  * Conversation API Client - handles conversation operations only
  */
 export class ConversationApiClient extends BaseApiClient {
+  
+  constructor(config?: BaseApiClientConfig) {
+    super(config || {
+      baseUrl: AppConfig.chat.baseUrl,
+      clientType: 'chat',
+      timeout: AppConfig.chat.timeout
+    });
+  }
 
   /**
    * Create a new conversation
@@ -35,7 +44,7 @@ export class ConversationApiClient extends BaseApiClient {
         jobId: payload.jobId
       });
 
-      const response = await this.post('/conversations', payload);
+      const response = await this.post<any>('/conversations', payload);
       
       console.log('✅ [ConversationApiClient] Conversation created successfully');
       
@@ -62,7 +71,7 @@ export class ConversationApiClient extends BaseApiClient {
     try {
       console.log('🔍 [ConversationApiClient] Getting conversation by ID:', conversationId);
       
-      const response = await this.get(`/conversations/${conversationId}`);
+      const response = await this.get<any>(`/conversations/${conversationId}`);
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -92,7 +101,7 @@ export class ConversationApiClient extends BaseApiClient {
     try {
       console.log('🔍 [ConversationApiClient] Finding job conversation:', { jobId, otherUserId });
       
-      const response = await this.get(`/conversations/job/${jobId}/participant/${otherUserId}`);
+      const response = await this.get<any>(`/conversations/job/${jobId}/participant/${otherUserId}`);
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -138,7 +147,7 @@ export class ConversationApiClient extends BaseApiClient {
       if (params?.isPinned !== undefined) queryParams.append('isPinned', params.isPinned.toString());
       if (params?.isMuted !== undefined) queryParams.append('isMuted', params.isMuted.toString());
       
-      const response = await this.get(`/conversations?${queryParams.toString()}`);
+      const response = await this.get<any>(`/conversations?${queryParams.toString()}`);
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -163,7 +172,7 @@ export class ConversationApiClient extends BaseApiClient {
    */
   async canInitiateChat(jobId: string, ustaId: string): Promise<boolean> {
     try {
-      const response = await this.get(`/conversations/can-initiate/${jobId}/${ustaId}`);
+      const response = await this.get<any>(`/conversations/can-initiate/${jobId}/${ustaId}`);
       
       return response?.canInitiate || false;
     } catch (error: any) {
@@ -271,7 +280,7 @@ export class ConversationApiClient extends BaseApiClient {
       if (params?.type) queryParams.append('type', params.type);
       if (params?.includeArchived) queryParams.append('includeArchived', 'true');
       
-      const response = await this.get(`/conversations/search?${queryParams.toString()}`);
+      const response = await this.get<any>(`/conversations/search?${queryParams.toString()}`);
       
       if (this.isSuccessResponse(response)) {
         return {

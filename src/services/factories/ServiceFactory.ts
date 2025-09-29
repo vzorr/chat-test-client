@@ -1,4 +1,4 @@
-// src/services/factories/ServiceFactory.ts - Service creation factory
+// src/services/factories/ServiceFactory.ts - Updated Service creation factory
 
 import {
   IMessageService,
@@ -18,15 +18,17 @@ import {
   PlatformDetector 
 } from '../../config/PlatformConfig';
 
-// Import implementations (these will be created separately)
-import { RestMessageService } from '../implementations/rest/RestMessageService';
-import { SocketMessageService } from '../implementations/socket/SocketMessageService';
-import { HybridMessageService } from '../implementations/hybrid/HybridMessageService';
-import { RestConversationService } from '../implementations/rest/RestConversationService';
-import { RestUserService } from '../implementations/rest/RestUserService';
-import { RestFileService } from '../implementations/rest/RestFileService';
-import { SocketRealtimeService } from '../implementations/socket/SocketRealtimeService';
-import { OfflineQueueService } from '../implementations/offline/OfflineQueueService';
+// Import the new merged BaseApiClient
+import { BaseApiClient, BaseApiClientConfig } from '../api/base/BaseApiClient';
+
+// Import implementations
+import { RestMessageService } from '../implementations/RestMessageService';
+import { SocketMessageService } from '../implementations/SocketMessageService';
+import { HybridMessageService } from '../implementations/HybridMessageService';
+import { RestConversationService } from '../implementations/RestConversationService';
+import { RestUserService } from '../implementations/RestUserService';
+import { RestFileService } from '../implementations/RestFileService';
+import { OfflineQueueService } from '../implementations/OfflineQueueService';
 
 // Storage implementations
 import { AsyncStorageService } from '../implementations/storage/AsyncStorageService';
@@ -35,19 +37,23 @@ import { MemoryStorageService } from '../implementations/storage/MemoryStorageSe
 import { FileStorageService } from '../implementations/storage/FileStorageService';
 
 // Cache implementation
-import { MemoryCacheService } from '../implementations/cache/MemoryCacheService';
+import { MemoryCacheService } from '../implementations/MemoryCacheService';
 
-// API and Socket clients
-import { ApiClient } from '../clients/ApiClient';
-import { SocketClient } from '../clients/SocketClient';
+// Socket client (still needed for socket-based services)
+import { socketService } from '../SocketService';
+import { ConnectionState } from '../../types/chat';
 
 export interface ServiceFactoryConfig {
   platform?: Platform;
   serviceType?: ServiceType;
   apiUrl?: string;
   socketUrl?: string;
+  chatUrl?: string;
+  notificationUrl?: string;
   token?: string;
+  userId?: string;
   enableLogging?: boolean;
+  enableCompression?: boolean;
   customImplementations?: {
     messageService?: IMessageService;
     conversationService?: IConversationService;
@@ -63,10 +69,16 @@ export interface ServiceFactoryConfig {
 export class ServiceFactory {
   private static instances = new Map<string, any>();
   private static config: ServiceFactoryConfig = {};
+  private static apiClients = new Map<string, BaseApiClient>();
   
   // Configure the factory
   static configure(config: ServiceFactoryConfig): void {
     this.config = { ...this.config, ...config };
+    
+    // Clear api clients if token changes
+    if (config.token) {
+      this.apiClients.clear();
+    }
   }
 
   // Create Message Service based on platform and service type
@@ -92,35 +104,38 @@ export class ServiceFactory {
     switch (serviceType) {
       case 'rest':
         service = new RestMessageService(
-          this.createApiClient(mergedConfig),
-          this.createCacheService(mergedConfig)
+          this.createApiClient(mergedConfig, 'chat'),
+          this.createCacheService(mergedConfig),
+          mergedConfig.userId || ''
         );
         break;
         
       case 'socket':
         service = new SocketMessageService(
-          this.createSocketClient(mergedConfig),
-          this.createCacheService(mergedConfig)
+          socketService,
+          this.createCacheService(mergedConfig),
+          mergedConfig.userId || ''
         );
         break;
         
       case 'hybrid':
       case 'offline-first':
         service = new HybridMessageService(
-          new RestMessageService(
-            this.createApiClient(mergedConfig),
-            this.createCacheService(mergedConfig)
-          ),
-          this.createRealtimeService(mergedConfig),
-          this.createOfflineQueueService(mergedConfig)
+          this.createApiClient(mergedConfig, 'chat'),
+          socketService,
+          this.createCacheService(mergedConfig),
+          this.createOfflineQueueService(mergedConfig),
+          () => socketService.getConnectionState(),
+          mergedConfig.userId || ''
         );
         break;
         
       default:
         // Default to REST
         service = new RestMessageService(
-          this.createApiClient(mergedConfig),
-          this.createCacheService(mergedConfig)
+          this.createApiClient(mergedConfig, 'chat'),
+          this.createCacheService(mergedConfig),
+          mergedConfig.userId || ''
         );
     }
     
@@ -143,8 +158,9 @@ export class ServiceFactory {
     }
     
     const service = new RestConversationService(
-      this.createApiClient(mergedConfig),
-      this.createCacheService(mergedConfig)
+      this.createApiClient(mergedConfig, 'chat'),
+      this.createCacheService(mergedConfig),
+      mergedConfig.userId || ''
     );
     
     this.instances.set(cacheKey, service);
@@ -166,8 +182,9 @@ export class ServiceFactory {
     }
     
     const service = new RestUserService(
-      this.createApiClient(mergedConfig),
-      this.createCacheService(mergedConfig)
+      this.createApiClient(mergedConfig, 'chat'),
+      this.createCacheService(mergedConfig),
+      mergedConfig.userId || ''
     );
     
     this.instances.set(cacheKey, service);
@@ -189,7 +206,8 @@ export class ServiceFactory {
     }
     
     const service = new RestFileService(
-      this.createApiClient(mergedConfig)
+      this.createApiClient(mergedConfig, 'chat'),
+      mergedConfig.userId || ''
     );
     
     this.instances.set(cacheKey, service);
@@ -210,12 +228,10 @@ export class ServiceFactory {
       return this.instances.get(cacheKey);
     }
     
-    const service = new SocketRealtimeService(
-      this.createSocketClient(mergedConfig)
-    );
-    
-    this.instances.set(cacheKey, service);
-    return service;
+    // For now, use the existing socketService singleton
+    // In future, could create SocketRealtimeService wrapper
+    this.instances.set(cacheKey, socketService);
+    return socketService;
   }
 
   // Create Offline Queue Service
@@ -267,9 +283,9 @@ export class ServiceFactory {
         break;
         
       case 'node-cli':
-        service = new FileStorageService(
-          process.env.STORAGE_PATH || './chat-data'
-        );
+        service = new FileStorageService({
+          dataPath: process.env.STORAGE_PATH || './chat-data'
+        });
         break;
         
       default:
@@ -300,63 +316,69 @@ export class ServiceFactory {
     return service;
   }
 
-  // Create API Client
-  private static createApiClient(config: ServiceFactoryConfig): ApiClient {
-    const cacheKey = 'api-client';
+  // Create API Client with the new BaseApiClient
+  private static createApiClient(
+    config: ServiceFactoryConfig, 
+    clientType: 'default' | 'chat' | 'notification' | 'formdata' | 'otp' = 'default'
+  ): BaseApiClient {
+    const cacheKey = `api-client-${clientType}`;
     
-    if (this.instances.has(cacheKey)) {
-      return this.instances.get(cacheKey);
+    if (this.apiClients.has(cacheKey)) {
+      const client = this.apiClients.get(cacheKey)!;
+      // Update token if changed
+      if (config.token && config.token !== client['token']) {
+        client.setToken(config.token);
+      }
+      return client;
     }
     
     const modularConfig = ModularConfig.getInstance();
-    const client = new ApiClient({
-      baseUrl: config.apiUrl || modularConfig.serviceConfig.apiUrl,
-      timeout: modularConfig.serviceConfig.timeout,
+    
+    let baseUrl: string;
+    let timeout: number;
+    
+    switch (clientType) {
+      case 'chat':
+        baseUrl = config.chatUrl || modularConfig.serviceConfig.apiUrl;
+        timeout = 30000;
+        break;
+      case 'notification':
+        baseUrl = config.notificationUrl || modularConfig.serviceConfig.apiUrl;
+        timeout = 30000;
+        break;
+      default:
+        baseUrl = config.apiUrl || modularConfig.serviceConfig.apiUrl;
+        timeout = modularConfig.serviceConfig.timeout;
+    }
+    
+    const clientConfig: BaseApiClientConfig = {
+      baseUrl,
+      token: config.token,
+      timeout,
       headers: modularConfig.serviceConfig.headers,
-      enableLogging: config.enableLogging
-    });
+      enableLogging: config.enableLogging,
+      enableCompression: config.enableCompression,
+      clientType,
+      retries: modularConfig.serviceConfig.retries || 3,
+      retryDelay: 2000
+    };
     
-    if (config.token) {
-      client.setToken(config.token);
-    }
+    const client = new BaseApiClient(clientConfig);
+    this.apiClients.set(cacheKey, client);
     
-    this.instances.set(cacheKey, client);
-    return client;
-  }
-
-  // Create Socket Client
-  private static createSocketClient(config: ServiceFactoryConfig): SocketClient {
-    const cacheKey = 'socket-client';
-    
-    if (this.instances.has(cacheKey)) {
-      return this.instances.get(cacheKey);
-    }
-    
-    const modularConfig = ModularConfig.getInstance();
-    const client = new SocketClient({
-      url: config.socketUrl || modularConfig.serviceConfig.socketUrl,
-      path: modularConfig.serviceConfig.socketPath,
-      enableLogging: config.enableLogging
-    });
-    
-    this.instances.set(cacheKey, client);
     return client;
   }
 
   // Clear all cached instances
   static clearInstances(): void {
     // Disconnect socket clients before clearing
-    const socketClient = this.instances.get('socket-client');
-    if (socketClient) {
-      socketClient.disconnect();
-    }
-    
     const realtimeService = this.instances.get('realtime-service');
     if (realtimeService) {
       realtimeService.disconnect();
     }
     
     this.instances.clear();
+    this.apiClients.clear();
   }
 
   // Create all services at once
@@ -379,6 +401,30 @@ export class ServiceFactory {
       offlineQueueService: this.createOfflineQueueService(config),
       storageService: this.createStorageService(config),
       cacheService: this.createCacheService(config)
+    };
+  }
+
+  // Update all API client tokens
+  static updateToken(newToken: string): void {
+    // Update config
+    this.config.token = newToken;
+    
+    // Update all existing API clients
+    for (const client of this.apiClients.values()) {
+      client.setToken(newToken);
+    }
+  }
+
+  // Get service statistics
+  static getServiceStats(): {
+    instances: number;
+    apiClients: number;
+    config: ServiceFactoryConfig;
+  } {
+    return {
+      instances: this.instances.size,
+      apiClients: this.apiClients.size,
+      config: this.config
     };
   }
 }

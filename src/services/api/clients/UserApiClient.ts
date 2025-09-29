@@ -1,11 +1,20 @@
 // src/services/api/clients/UserApiClient.ts
-import { BaseApiClient } from '../base/BaseApiClient';
+import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { UserRegistrationData } from '../../../types/chat';
+import { AppConfig } from '../../../config/AppConfig';
 
 /**
  * User API Client - handles user operations and blocking
  */
 export class UserApiClient extends BaseApiClient {
+  
+  constructor(config?: BaseApiClientConfig) {
+    super(config || {
+      baseUrl: AppConfig.chat.baseUrl,
+      clientType: 'chat',
+      timeout: AppConfig.chat.timeout
+    });
+  }
   
   /**
    * Check if a user exists in the chat server
@@ -19,7 +28,7 @@ export class UserApiClient extends BaseApiClient {
       email: string;
       phone: string;
       avatar: string;
-      role: 'customer' | 'ust' | 'admin';
+      role: 'customer' | 'usta' | 'admin';
       isOnline: boolean;
       lastSeen: string;
       createdAt: string;
@@ -34,7 +43,7 @@ export class UserApiClient extends BaseApiClient {
     try {
       console.log('🔍 [UserApiClient] Checking user existence:', userId);
       
-      const response = await this.get(`/users/${userId}`);
+      const response = await this.get<any>(`/users/${userId}`);
       
       console.log('✅ [UserApiClient] User check response:', {
         status: 'success',
@@ -81,7 +90,7 @@ export class UserApiClient extends BaseApiClient {
         role: userData.role
       });
 
-      const response = await this.post('/auth/register-user', userData);
+      const response = await this.post<any>('/auth/register-user', userData);
 
       console.log('✅ [UserApiClient] User registration response:', {
         success: response?.success,
@@ -118,7 +127,7 @@ export class UserApiClient extends BaseApiClient {
     try {
       console.log('👤 [UserApiClient] Getting user details:', userId);
       
-      const response = await this.get(`/users/${userId}/details`);
+      const response = await this.get<any>(`/users/${userId}/details`);
       
       console.log('✅ [UserApiClient] User details retrieved');
       return response;
@@ -179,7 +188,7 @@ export class UserApiClient extends BaseApiClient {
    */
   async checkBlockStatus(userId: string): Promise<{ isBlocked: boolean }> {
     try {
-      const response = await this.get(`/users/block-status/${userId}`);
+      const response = await this.get<any>(`/users/block-status/${userId}`);
       
       return {
         isBlocked: response?.isBlocked || false
@@ -198,7 +207,7 @@ export class UserApiClient extends BaseApiClient {
     users?: string[];
   }> {
     try {
-      const response = await this.get('/users/blocked');
+      const response = await this.get<any>('/users/blocked');
       
       return {
         success: true,
@@ -236,7 +245,7 @@ export class UserApiClient extends BaseApiClient {
     status?: string;
   }> {
     try {
-      const response = await this.get(`/users/${userId}/status`);
+      const response = await this.get<any>(`/users/${userId}/status`);
       
       return {
         isOnline: response?.isOnline || false,
@@ -291,7 +300,7 @@ export class UserApiClient extends BaseApiClient {
     };
   }> {
     try {
-      const response = await this.get('/users/preferences');
+      const response = await this.get<any>('/users/preferences');
       
       return response?.preferences || {
         notifications: {
@@ -375,7 +384,7 @@ export class UserApiClient extends BaseApiClient {
       if (options?.role) queryParams.append('role', options.role);
       if (options?.excludeBlocked) queryParams.append('excludeBlocked', 'true');
       
-      const response = await this.get(`/users/search?${queryParams.toString()}`);
+      const response = await this.get<any>(`/users/search?${queryParams.toString()}`);
       
       if (this.isSuccessResponse(response)) {
         return {

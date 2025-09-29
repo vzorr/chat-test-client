@@ -1,7 +1,14 @@
 // src/services/api/index.ts - Export all API clients
 
-// Base client
-export { BaseApiClient } from './base/BaseApiClient';
+// Base client with all the merged functionality
+export { BaseApiClient, BaseApiClientConfig } from './base/BaseApiClient';
+export { 
+  createApiClient,
+  createChatClient,
+  createNotificationClient,
+  createFormDataClient,
+  createOtpClient
+} from './base/BaseApiClient';
 
 // Specialized clients
 export { UserApiClient } from './clients/UserApiClient';
@@ -17,44 +24,48 @@ export class ApiClientFactory {
    * Create a UserApiClient instance
    */
   static createUserApiClient(token?: string): UserApiClient {
-    const client = new UserApiClient();
-    if (token) {
-      client.setToken(token);
+    const key = `user-${token || 'default'}`;
+    if (!this.instances.has(key)) {
+      const client = new UserApiClient({ token });
+      this.instances.set(key, client);
     }
-    return client;
+    return this.instances.get(key);
   }
 
   /**
    * Create a ConversationApiClient instance
    */
   static createConversationApiClient(token?: string): ConversationApiClient {
-    const client = new ConversationApiClient();
-    if (token) {
-      client.setToken(token);
+    const key = `conversation-${token || 'default'}`;
+    if (!this.instances.has(key)) {
+      const client = new ConversationApiClient({ token });
+      this.instances.set(key, client);
     }
-    return client;
+    return this.instances.get(key);
   }
 
   /**
    * Create a MessageApiClient instance
    */
   static createMessageApiClient(token?: string): MessageApiClient {
-    const client = new MessageApiClient();
-    if (token) {
-      client.setToken(token);
+    const key = `message-${token || 'default'}`;
+    if (!this.instances.has(key)) {
+      const client = new MessageApiClient({ token });
+      this.instances.set(key, client);
     }
-    return client;
+    return this.instances.get(key);
   }
 
   /**
    * Create a FileApiClient instance
    */
   static createFileApiClient(token?: string): FileApiClient {
-    const client = new FileApiClient();
-    if (token) {
-      client.setToken(token);
+    const key = `file-${token || 'default'}`;
+    if (!this.instances.has(key)) {
+      const client = new FileApiClient({ token });
+      this.instances.set(key, client);
     }
-    return client;
+    return this.instances.get(key);
   }
 
   /**
@@ -75,24 +86,6 @@ export class ApiClientFactory {
   }
 
   /**
-   * Get or create singleton instances (cached by token)
-   */
-  static getSingletonClients(token: string): {
-    userClient: UserApiClient;
-    conversationClient: ConversationApiClient;
-    messageClient: MessageApiClient;
-    fileClient: FileApiClient;
-  } {
-    const cacheKey = `clients_${token}`;
-    
-    if (!this.instances.has(cacheKey)) {
-      this.instances.set(cacheKey, this.createAllClients(token));
-    }
-    
-    return this.instances.get(cacheKey);
-  }
-
-  /**
    * Clear cached instances
    */
   static clearCache(): void {
@@ -103,45 +96,16 @@ export class ApiClientFactory {
    * Update token for all cached instances
    */
   static updateToken(oldToken: string, newToken: string): void {
-    const oldCacheKey = `clients_${oldToken}`;
-    const newCacheKey = `clients_${newToken}`;
-    
-    if (this.instances.has(oldCacheKey)) {
-      const clients = this.instances.get(oldCacheKey);
-      
-      // Update tokens on all clients
-      clients.userClient.setToken(newToken);
-      clients.conversationClient.setToken(newToken);
-      clients.messageClient.setToken(newToken);
-      clients.fileClient.setToken(newToken);
-      
-      // Move to new cache key
-      this.instances.set(newCacheKey, clients);
-      this.instances.delete(oldCacheKey);
+    // Update all existing clients with new token
+    for (const [key, client] of this.instances.entries()) {
+      if (key.includes(oldToken)) {
+        client.setToken(newToken);
+        // Update the key in the map
+        const newKey = key.replace(oldToken, newToken);
+        this.instances.delete(key);
+        this.instances.set(newKey, client);
+      }
     }
-  }
-
-  /**
-   * Create clients for specific operations only
-   */
-  static createUserOperationsClient(token?: string): {
-    userClient: UserApiClient;
-  } {
-    return {
-      userClient: this.createUserApiClient(token)
-    };
-  }
-
-  static createMessagingClients(token?: string): {
-    conversationClient: ConversationApiClient;
-    messageClient: MessageApiClient;
-    fileClient: FileApiClient;
-  } {
-    return {
-      conversationClient: this.createConversationApiClient(token),
-      messageClient: this.createMessageApiClient(token),
-      fileClient: this.createFileApiClient(token)
-    };
   }
 
   /**

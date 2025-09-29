@@ -1,5 +1,5 @@
 // src/services/api/clients/MessageApiClient.ts
-import { BaseApiClient } from '../base/BaseApiClient';
+import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { 
   Message, 
   MessageType,
@@ -7,11 +7,20 @@ import {
   AttachmentType,
   Attachment
 } from '../../../types/chat';
+import { AppConfig } from '../../../config/AppConfig';
 
 /**
  * Message API Client - handles message operations only
  */
 export class MessageApiClient extends BaseApiClient {
+  
+  constructor(config?: BaseApiClientConfig) {
+    super(config || {
+      baseUrl: AppConfig.chat.baseUrl,
+      clientType: 'chat',
+      timeout: AppConfig.chat.timeout
+    });
+  }
 
   /**
    * Get messages for a conversation
@@ -26,7 +35,7 @@ export class MessageApiClient extends BaseApiClient {
       console.log("🔍 [MessageApiClient] Getting messages for conversation:", conversationId);
       
       const offset = (page - 1) * limit;
-      const response = await this.get(
+      const response = await this.get<any>(
         `/messages/conversation/${conversationId}?limit=${limit}&offset=${offset}`
       );
 
@@ -63,7 +72,7 @@ export class MessageApiClient extends BaseApiClient {
     try {
       console.log('📤 [MessageApiClient] Sending message');
       
-      const response = await this.post('/messages', payload);
+      const response = await this.post<any>('/messages', payload);
 
       if (this.isSuccessResponse(response)) {
         return {
@@ -108,7 +117,7 @@ export class MessageApiClient extends BaseApiClient {
     try {
       console.log('✏️ [MessageApiClient] Editing message:', messageId);
       
-      const response = await this.put(`/messages/${messageId}`, { content });
+      const response = await this.put<any>(`/messages/${messageId}`, { content });
 
       if (this.isSuccessResponse(response)) {
         return {
@@ -150,7 +159,7 @@ export class MessageApiClient extends BaseApiClient {
     try {
       console.log('🔍 [MessageApiClient] Getting message by ID:', messageId);
       
-      const response = await this.get(`/messages/${messageId}`);
+      const response = await this.get<any>(`/messages/${messageId}`);
 
       if (this.isSuccessResponse(response)) {
         return {
@@ -196,7 +205,7 @@ export class MessageApiClient extends BaseApiClient {
       if (params?.page) queryParams.append('page', params.page.toString());
       if (params?.limit) queryParams.append('limit', params.limit.toString());
       
-      const response = await this.get(`/messages/search?${queryParams.toString()}`);
+      const response = await this.get<any>(`/messages/search?${queryParams.toString()}`);
 
       if (this.isSuccessResponse(response)) {
         return {
@@ -301,7 +310,7 @@ export class MessageApiClient extends BaseApiClient {
     messageTypes: Record<string, number>;
   }> {
     try {
-      const response = await this.get(`/messages/conversation/${conversationId}/stats`);
+      const response = await this.get<any>(`/messages/conversation/${conversationId}/stats`);
       
       if (this.isSuccessResponse(response)) {
         return response.stats;
@@ -348,7 +357,7 @@ export class MessageApiClient extends BaseApiClient {
       if (filters.page) queryParams.append('page', filters.page.toString());
       if (filters.limit) queryParams.append('limit', filters.limit.toString());
       
-      const response = await this.get(
+      const response = await this.get<any>(
         `/messages/conversation/${conversationId}/filtered?${queryParams.toString()}`
       );
 

@@ -1,14 +1,23 @@
 // src/services/api/clients/FileApiClient.ts
-import { BaseApiClient } from '../base/BaseApiClient';
+import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { 
   Attachment,
   AttachmentType
 } from '../../../types/chat';
+import { AppConfig } from '../../../config/AppConfig';
 
 /**
  * File API Client - handles file upload operations only
  */
 export class FileApiClient extends BaseApiClient {
+  
+  constructor(config?: BaseApiClientConfig) {
+    super(config || {
+      baseUrl: AppConfig.chat.baseUrl,
+      clientType: 'formdata',
+      timeout: AppConfig.chat?.uploadTimeout || 60000
+    });
+  }
 
   /**
    * Upload a file attachment
@@ -33,35 +42,22 @@ export class FileApiClient extends BaseApiClient {
         );
       }
 
-      // Create form data
-      const formData = this.createFormData(file, type);
+      // Use the postFormData method from BaseApiClient
+      const response = await this.postFormData('/upload', file, { type });
 
-      // Upload with progress tracking
-      const response = await this.apiClient.post('/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${this.token}`,
-        },
-        timeout: 60000, // 60 seconds for file uploads
-        onUploadProgress: (progressEvent: any) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          console.log(`📊 [FileApiClient] Upload progress: ${percentCompleted}%`);
-        }
-      });
-
-      if (response.data?.success) {
+      if (response?.success) {
         const attachment: Attachment = {
-          id: response.data.file.id,
+          id: response.file.id,
           type,
-          url: response.data.file.url,
-          name: response.data.file.name || file.name,
-          size: response.data.file.size || file.size,
-          thumbnailUrl: response.data.file.thumbnailUrl,
-          mimeType: response.data.file.mimeType || file.type,
-          duration: response.data.file.duration,
-          width: response.data.file.width,
-          height: response.data.file.height,
-          uploadedAt: response.data.file.uploadedAt || new Date().toISOString()
+          url: response.file.url,
+          name: response.file.name || file.name,
+          size: response.file.size || file.size,
+          thumbnailUrl: response.file.thumbnailUrl,
+          mimeType: response.file.mimeType || file.type,
+          duration: response.file.duration,
+          width: response.file.width,
+          height: response.file.height,
+          uploadedAt: response.file.uploadedAt || new Date().toISOString()
         };
         
         console.log('✅ [FileApiClient] File uploaded successfully');
@@ -101,7 +97,7 @@ export class FileApiClient extends BaseApiClient {
     try {
       console.log('🔍 [FileApiClient] Getting file info:', fileId);
       
-      const response = await this.get(`/files/${fileId}`);
+      const response = await this.get<any>(`/files/${fileId}`);
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -129,7 +125,7 @@ export class FileApiClient extends BaseApiClient {
     expiresAt?: string;
   }> {
     try {
-      const response = await this.get(`/files/${fileId}/download-url`);
+      const response = await this.get<any>(`/files/${fileId}/download-url`);
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -160,7 +156,7 @@ export class FileApiClient extends BaseApiClient {
     try {
       console.log('🖼️ [FileApiClient] Generating thumbnail for:', fileId);
       
-      const response = await this.post(`/files/${fileId}/thumbnail`, options || {});
+      const response = await this.post<any>(`/files/${fileId}/thumbnail`, options || {});
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -186,7 +182,7 @@ export class FileApiClient extends BaseApiClient {
     recentUploads: Attachment[];
   }> {
     try {
-      const response = await this.get('/files/stats');
+      const response = await this.get<any>('/files/stats');
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -268,14 +264,11 @@ export class FileApiClient extends BaseApiClient {
     try {
       console.log('🗜️ [FileApiClient] Compressing image');
       
-      const formData = new FormData();
-      formData.append('file', file);
-      if (options?.maxWidth) formData.append('maxWidth', options.maxWidth.toString());
-      if (options?.maxHeight) formData.append('maxHeight', options.maxHeight.toString());
-      if (options?.quality) formData.append('quality', options.quality.toString());
-      
-      const response = await this.post('/files/compress', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      // Use postFormData method from BaseApiClient
+      const response = await this.postFormData('/files/compress', file, {
+        maxWidth: options?.maxWidth,
+        maxHeight: options?.maxHeight,
+        quality: options?.quality
       });
       
       if (this.isSuccessResponse(response)) {
@@ -300,7 +293,7 @@ export class FileApiClient extends BaseApiClient {
     typeBreakdown: Record<AttachmentType, { count: number; size: number }>;
   }> {
     try {
-      const response = await this.get('/files/usage');
+      const response = await this.get<any>('/files/usage');
       
       if (this.isSuccessResponse(response)) {
         return {
@@ -320,7 +313,7 @@ export class FileApiClient extends BaseApiClient {
         totalSize: 0,
         storageLimit: 0,
         usagePercentage: 0,
-        typeBreakdown: {}
+        typeBreakdown: {} as Record<AttachmentType, { count: number; size: number }>
       };
     }
   }
@@ -328,52 +321,6 @@ export class FileApiClient extends BaseApiClient {
   // ========================================
   // PRIVATE HELPER METHODS
   // ========================================
-
-  /**
-   * Create FormData for file upload
-   */
-  private createFormData(file: any, type: AttachmentType): FormData {
-    const formData = new FormData();
-    
-    // Handle different platforms
-    const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
-    
-    if (isNodeEnvironment) {
-      // Node.js environment - use standard FormData with fs
-      const fs = require('fs');
-      
-      if (file.path) {
-        formData.append('file', fs.createReadStream(file.path), {
-          filename: file.name || `${type}-${Date.now()}.bin`,
-          contentType: file.type || this.getMimeType(type)
-        });
-      } else if (file.buffer) {
-        formData.append('file', file.buffer, {
-          filename: file.name || `${type}-${Date.now()}.bin`,
-          contentType: file.type || this.getMimeType(type)
-        });
-      } else {
-        throw new Error('Invalid file format for Node.js environment');
-      }
-    } else {
-      // Browser/React Native environment
-      if (file.uri) {
-        // React Native format
-        formData.append('file', {
-          uri: file.uri,
-          type: file.type || this.getMimeType(type),
-          name: file.name || `${type}-${Date.now()}.${this.getFileExtension(type)}`
-        } as any);
-      } else {
-        // Browser File object
-        formData.append('file', file);
-      }
-    }
-    
-    formData.append('type', type);
-    
-    return formData;
-  }
 
   /**
    * Transform file response to Attachment format
@@ -392,34 +339,6 @@ export class FileApiClient extends BaseApiClient {
       height: data.height,
       uploadedAt: data.uploadedAt || data.createdAt
     };
-  }
-
-  /**
-   * Get MIME type for attachment type
-   */
-  private getMimeType(type: AttachmentType): string {
-    switch (type) {
-      case AttachmentType.IMAGE: return 'image/jpeg';
-      case AttachmentType.AUDIO: return 'audio/mp4';
-      case AttachmentType.VIDEO: return 'video/mp4';
-      case AttachmentType.DOCUMENT: return 'application/pdf';
-      case AttachmentType.FILE:
-      default: return 'application/octet-stream';
-    }
-  }
-
-  /**
-   * Get file extension for attachment type
-   */
-  private getFileExtension(type: AttachmentType): string {
-    switch (type) {
-      case AttachmentType.IMAGE: return 'jpg';
-      case AttachmentType.AUDIO: return 'm4a';
-      case AttachmentType.VIDEO: return 'mp4';
-      case AttachmentType.DOCUMENT: return 'pdf';
-      case AttachmentType.FILE:
-      default: return 'bin';
-    }
   }
 
   /**
