@@ -1,4 +1,4 @@
-// src/services/api/BaseApiClient.ts - Fixed TypeScript issues
+// src/services/api/base/BaseApiClient.ts - Fixed and Cleaned Implementation
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -7,7 +7,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 
-import { AppConfig, AppLogger } from '../../../config/AppConfig';
+import { AppConfig } from '../../../config/AppConfig';
 import { AuthService } from '../../AuthService';
 import { logger } from '../../../utils/Logger';
 
@@ -28,16 +28,20 @@ export interface ApiClientConfig {
   enableCompression?: boolean;
 }
 
-interface RequestMetadata {
-  startTime: number;
-  retryCount: number; // No longer optional - always initialized to 0
-  attemptNumber: number; // Track attempt number for exponential backoff
+export interface BaseApiClientConfig extends ApiClientConfig {
+  clientType?: 'default' | 'chat' | 'notification' | 'formdata' | 'otp';
 }
 
-// Extend InternalAxiosRequestConfig to include _retry
+interface RequestMetadata {
+  startTime: number;
+  retryCount: number;
+  attemptNumber: number;
+}
+
 declare module 'axios' {
   interface InternalAxiosRequestConfig {
     _retry?: boolean;
+    _metadata?: RequestMetadata;
   }
 }
 
@@ -47,13 +51,13 @@ declare module 'axios' {
 
 export class BaseApiClient {
   protected axiosInstance: AxiosInstance;
-  protected config: Required<ApiClientConfig>; // Make all config properties required
+  protected config: Required<ApiClientConfig>;
   protected token: string | null = null;
+  protected clientType: string;
   
   private requestMetadata = new WeakMap<InternalAxiosRequestConfig, RequestMetadata>();
 
-  constructor(config: ApiClientConfig = {}) {
-    // Merge with defaults - ensuring all properties are defined
+  constructor(config: BaseApiClientConfig = {}) {
     this.config = {
       baseUrl: config.baseUrl || AppConfig.api.baseUrl,
       token: config.token || null,
@@ -61,13 +65,14 @@ export class BaseApiClient {
       headers: config.headers || {},
       retries: config.retries ?? AppConfig.api.retries,
       retryDelay: config.retryDelay ?? AppConfig.api.retryDelay,
-      enableExponentialBackoff: config.enableExponentialBackoff ?? false,
-      maxRetryDelay: config.maxRetryDelay ?? 10000,
+      enableExponentialBackoff: config.enableExponentialBackoff ?? AppConfig.api.enableExponentialBackoff ?? false,
+      maxRetryDelay: config.maxRetryDelay ?? AppConfig.api.maxRetryDelay ?? 10000,
       enableLogging: config.enableLogging ?? AppConfig.debug.enabled,
-      enableCompression: true,
+      enableCompression: config.enableCompression ?? true,
     };
 
     this.token = this.config.token;
+    this.clientType = config.clientType || 'default';
     this.axiosInstance = this.createAxiosInstance();
     this.setupInterceptors();
   }
@@ -105,7 +110,6 @@ export class BaseApiClient {
   // INTERCEPTORS
   // ==========================================
 
-
   private setupInterceptors(): void {
     // Request interceptor
     this.axiosInstance.interceptors.request.use(
@@ -117,17 +121,18 @@ export class BaseApiClient {
         };
         
         this.requestMetadata.set(config, metadata);
+        config._metadata = metadata;
 
         logger.network('API Request', {
           method: config.method?.toUpperCase(),
           url: `${config.baseURL}${config.url}`,
-          headers: this.sanitizeHeaders(config.headers),
+          headers: this.sanitizeHeaders(config.headers)
         });
 
         return config;
       },
       (error: AxiosError) => {
-        logger.error('Request error', error);
+        logger.error('Request interceptor error', error);
         return Promise.reject(error);
       }
     );
@@ -141,17 +146,23 @@ export class BaseApiClient {
         logger.network('API Response', {
           status: response.status,
           url: response.config.url,
-          duration: `${duration}ms`,
+          duration: `${duration}ms`
         });
 
+        this.requestMetadata.delete(response.config as InternalAxiosRequestConfig);
         return response;
       },
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig;
 
+        if (!originalRequest) {
+          logger.error('API Error - No original request', error);
+          return Promise.reject(error);
+        }
+
         logger.error('API Error', error, {
           url: originalRequest?.url,
-          status: error.response?.status,
+          status: error.response?.status
         });
 
         // Handle 401
@@ -161,39 +172,17 @@ export class BaseApiClient {
 
         // Handle retries
         if (this.shouldRetry(error) && !originalRequest._retry) {
-          const metadata = this.requestMetadata.get(originalRequest);
+          const metadata = this.requestMetadata.get(originalRequest) || originalRequest._metadata;
           if (metadata && metadata.retryCount < this.config.retries) {
             return this.handleRetry(originalRequest, error, metadata);
           }
         }
 
+        this.requestMetadata.delete(originalRequest);
         return Promise.reject(error);
       }
     );
   }
-
-  private async handleRetry(
-    originalRequest: InternalAxiosRequestConfig,
-    error: AxiosError,
-    metadata: RequestMetadata
-  ): Promise<any> {
-    metadata.retryCount++;
-    metadata.attemptNumber++;
-    
-    this.requestMetadata.set(originalRequest, metadata);
-    originalRequest._retry = true;
-
-    const delay = this.calculateDelay(metadata.attemptNumber);
-
-    logger.info(`Retrying request (${metadata.attemptNumber}/${this.config.retries + 1})`, {
-      url: originalRequest.url,
-      delay: `${delay}ms`,
-    });
-
-    await this.delay(delay);
-    return this.axiosInstance(originalRequest);
-  }
-
 
   // ==========================================
   // ERROR HANDLERS
@@ -207,59 +196,84 @@ export class BaseApiClient {
 
     try {
       if (this.token && AuthService.refreshToken) {
+        logger.info('Attempting to refresh token...');
         const newToken = await AuthService.refreshToken();
         
         if (newToken) {
           this.setToken(newToken);
           originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+          logger.info('Token refreshed successfully');
           return this.axiosInstance(originalRequest);
         }
       }
     } catch (refreshError) {
-      AppLogger.error('Token refresh failed:', refreshError);
+      logger.error('Token refresh failed', refreshError);
     }
 
     return Promise.reject(error);
   }
 
+  private async handleRetry(
+    originalRequest: InternalAxiosRequestConfig,
+    error: AxiosError,
+    metadata: RequestMetadata
+  ): Promise<any> {
+    metadata.retryCount++;
+    metadata.attemptNumber++;
+    
+    this.requestMetadata.set(originalRequest, metadata);
+    originalRequest._retry = true;
+    originalRequest._metadata = metadata;
 
+    const delay = this.calculateDelay(metadata.attemptNumber);
+
+    logger.info(`Retrying request (${metadata.attemptNumber}/${this.config.retries + 1})`, {
+      url: originalRequest.url,
+      delay: `${delay}ms`
+    });
+
+    await this.delay(delay);
+    originalRequest._retry = false;
+    
+    return this.axiosInstance(originalRequest);
+  }
 
   private shouldRetry(error: AxiosError): boolean {
-    // Determine if the error is retryable based on status code
+    if (axios.isCancel(error)) {
+      return false;
+    }
+
     const statusCode = error.response?.status;
     
     if (!statusCode) {
-      // Network errors are retryable
-      return true;
+      return true; // Network errors
     }
     
-    // Retry on specific status codes
-    const retryableStatusCodes = [
-      408, // Request Timeout
-      429, // Too Many Requests
-      500, // Internal Server Error
-      502, // Bad Gateway
-      503, // Service Unavailable
-      504, // Gateway Timeout
-    ];
-    
+    const retryableStatusCodes = [408, 429, 500, 502, 503, 504];
     return retryableStatusCodes.includes(statusCode);
   }
 
+  // ==========================================
+  // DELAY CALCULATION
+  // ==========================================
+
+  protected calculateDelay(attemptNumber: number): number {
+    if (this.config.enableExponentialBackoff) {
+      return this.calculateExponentialDelay(attemptNumber);
+    }
+    return this.config.retryDelay;
+  }
+
   private calculateExponentialDelay(attemptNumber: number): number {
-    // Calculate exponential backoff delay
     const baseDelay = this.config.retryDelay;
     const maxDelay = this.config.maxRetryDelay;
     
-    // 2^attempt * baseDelay with jitter
     const exponentialDelay = Math.min(
       baseDelay * Math.pow(2, attemptNumber - 1),
       maxDelay
     );
     
-    // Add random jitter (0-25% of calculated delay)
     const jitter = Math.random() * 0.25 * exponentialDelay;
-    
     return Math.floor(exponentialDelay + jitter);
   }
 
@@ -293,17 +307,44 @@ export class BaseApiClient {
   }
 
   // ==========================================
+  // SPECIALIZED METHODS
+  // ==========================================
+
+  async postFormData(
+    url: string, 
+    formData: FormData,
+    config?: AxiosRequestConfig & { onUploadProgress?: (percent: number) => void }
+  ): Promise<any> {
+    const response = await this.axiosInstance.post(url, formData, {
+      ...config,
+      headers: { 
+        ...config?.headers,
+        'Content-Type': 'multipart/form-data' 
+      },
+      timeout: config?.timeout || AppConfig.chat.uploadTimeout || 60000,
+      onUploadProgress: config?.onUploadProgress ? (progressEvent: any) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        config.onUploadProgress!(percentCompleted);
+      } : undefined,
+    });
+    
+    return response.data;
+  }
+
+  // ==========================================
   // UTILITY METHODS
   // ==========================================
 
   setToken(token: string): void {
     this.token = token;
     this.axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    logger.debug('API client token updated');
   }
 
   removeToken(): void {
     this.token = null;
     delete this.axiosInstance.defaults.headers.common['Authorization'];
+    logger.debug('API client token removed');
   }
 
   setHeader(key: string, value: string): void {
@@ -318,50 +359,53 @@ export class BaseApiClient {
     return this.axiosInstance;
   }
 
-  // Get current configuration
   getConfig(): Required<ApiClientConfig> {
     return { ...this.config };
   }
 
-  // Update retry configuration at runtime
   updateRetryConfig(retryConfig: Partial<Pick<ApiClientConfig, 'retries' | 'retryDelay' | 'enableExponentialBackoff' | 'maxRetryDelay'>>): void {
     Object.assign(this.config, retryConfig);
     
-    if (this.config.enableLogging) {
-      AppLogger.info('Retry configuration updated:', {
-        retries: this.config.retries,
-        retryDelay: this.config.retryDelay,
-        enableExponentialBackoff: this.config.enableExponentialBackoff,
-        maxRetryDelay: this.config.maxRetryDelay,
-      });
-    }
+    logger.info('Retry configuration updated', {
+      retries: this.config.retries,
+      retryDelay: this.config.retryDelay,
+      enableExponentialBackoff: this.config.enableExponentialBackoff,
+      maxRetryDelay: this.config.maxRetryDelay
+    });
   }
 
   // ==========================================
   // PROTECTED HELPERS FOR CHILD CLASSES
   // ==========================================
 
-  protected async uploadFormData(url: string, formData: FormData, onProgress?: (percent: number) => void): Promise<any> {
-    const response = await this.axiosInstance.post(url, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: AppConfig.chat.uploadTimeout,
-      onUploadProgress: onProgress ? (progressEvent: any) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        onProgress(percentCompleted);
-      } : undefined,
-    });
-    return response.data;
-  }
-
   protected isSuccessResponse(response: any): boolean {
-    return response && (response.success === true || response.code === 200);
+    return response && (
+      response.success === true || 
+      response.code === 200 || 
+      response.status === 'success'
+    );
   }
 
   protected extractData<T>(response: any): T {
     if (this.isSuccessResponse(response)) {
       return response.data || response.result || response;
     }
-    throw new Error(response?.message || response?.error || 'Request failed');
+    
+    const errorMessage = response?.message || response?.error || 'Request failed';
+    logger.error('Failed to extract data from response', null, response);
+    throw new Error(errorMessage);
+  }
+
+  protected safeLogError(message: string, error: any, context?: any): void {
+    logger.error(message, error, context);
+  }
+
+  protected safeLogInfo(message: string, data?: any): void {
+    logger.info(message, data);
+  }
+
+  protected safeLogDebug(message: string, data?: any): void {
+    logger.debug(message, data);
   }
 
   // ==========================================
@@ -374,40 +418,15 @@ export class BaseApiClient {
 
   private sanitizeHeaders(headers: any): any {
     const sanitized = { ...headers };
-    if (sanitized.Authorization) {
-      sanitized.Authorization = '[HIDDEN]';
-    }
-    if (sanitized['x-auth-token']) {
-      sanitized['x-auth-token'] = '[HIDDEN]';
-    }
+    const sensitiveKeys = ['authorization', 'x-auth-token', 'x-api-key', 'cookie'];
+    
+    Object.keys(sanitized).forEach(key => {
+      if (sensitiveKeys.includes(key.toLowerCase())) {
+        sanitized[key] = '[HIDDEN]';
+      }
+    });
+    
     return sanitized;
-  }
-}
-
-// ==========================================
-// API CLIENT FACTORY
-// ==========================================
-
-export class ApiClientFactory {
-  private static instances = new Map<string, BaseApiClient>();
-
-  static create(name: string, config?: ApiClientConfig): BaseApiClient {
-    if (!this.instances.has(name)) {
-      this.instances.set(name, new BaseApiClient(config));
-    }
-    return this.instances.get(name)!;
-  }
-
-  static get(name: string): BaseApiClient | undefined {
-    return this.instances.get(name);
-  }
-
-  static destroy(name: string): void {
-    this.instances.delete(name);
-  }
-
-  static destroyAll(): void {
-    this.instances.clear();
   }
 }
 

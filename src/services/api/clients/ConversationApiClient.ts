@@ -1,4 +1,4 @@
-// src/services/api/clients/ConversationApiClient.ts
+// src/services/api/clients/ConversationApiClient.ts - Updated with AppConfig and centralized Logger
 import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { 
   ServerConversation,
@@ -12,6 +12,7 @@ import {
   Message
 } from '../../../types/chat';
 import { AppConfig } from '../../../config/AppConfig';
+import { logger } from '../../../utils/Logger';
 
 /**
  * Conversation API Client - handles conversation operations only
@@ -37,7 +38,7 @@ export class ConversationApiClient extends BaseApiClient {
     jobTitle?: string;
   }): Promise<ConversationCreationResponse> {
     try {
-      console.log('📤 [ConversationApiClient] Creating conversation:', {
+      logger.info('Creating conversation:', {
         participantIds: payload.participantIds,
         type: payload.type,
         status: payload.status,
@@ -46,7 +47,7 @@ export class ConversationApiClient extends BaseApiClient {
 
       const response = await this.post<any>('/conversations', payload);
       
-      console.log('✅ [ConversationApiClient] Conversation created successfully');
+      logger.info('Conversation created successfully');
       
       return {
         success: response.success || true,
@@ -69,7 +70,7 @@ export class ConversationApiClient extends BaseApiClient {
     error?: any;
   }> {
     try {
-      console.log('🔍 [ConversationApiClient] Getting conversation by ID:', conversationId);
+      logger.debug('Getting conversation by ID:', conversationId);
       
       const response = await this.get<any>(`/conversations/${conversationId}`);
       
@@ -99,7 +100,7 @@ export class ConversationApiClient extends BaseApiClient {
     error?: any;
   }> {
     try {
-      console.log('🔍 [ConversationApiClient] Finding job conversation:', { jobId, otherUserId });
+      logger.debug('Finding job conversation:', { jobId, otherUserId });
       
       const response = await this.get<any>(`/conversations/job/${jobId}/participant/${otherUserId}`);
       
@@ -137,7 +138,7 @@ export class ConversationApiClient extends BaseApiClient {
     total: number;
   }> {
     try {
-      console.log('📋 [ConversationApiClient] Getting conversations:', params);
+      logger.debug('Getting conversations:', params);
       
       const queryParams = new URLSearchParams();
       if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -189,11 +190,11 @@ export class ConversationApiClient extends BaseApiClient {
     settings: Partial<ConversationSettings>
   ): Promise<void> {
     try {
-      console.log('⚙️ [ConversationApiClient] Updating conversation settings:', { conversationId, settings });
+      logger.info('Updating conversation settings:', { conversationId, settings });
       
       await this.patch(`/conversations/${conversationId}/settings`, settings);
       
-      console.log('✅ [ConversationApiClient] Conversation settings updated');
+      logger.info('Conversation settings updated');
     } catch (error: any) {
       this.safeLogError('Error updating conversation settings', error);
       throw error;
@@ -208,11 +209,11 @@ export class ConversationApiClient extends BaseApiClient {
     status: 'active' | 'closed' | 'archived'
   ): Promise<void> {
     try {
-      console.log('📝 [ConversationApiClient] Updating conversation status:', { conversationId, status });
+      logger.info('Updating conversation status:', { conversationId, status });
       
       await this.patch(`/conversations/${conversationId}/status`, { status });
       
-      console.log('✅ [ConversationApiClient] Conversation status updated');
+      logger.info('Conversation status updated');
     } catch (error: any) {
       this.safeLogError('Error updating conversation status', error);
       throw error;
@@ -224,11 +225,11 @@ export class ConversationApiClient extends BaseApiClient {
    */
   async deleteConversation(conversationId: string): Promise<void> {
     try {
-      console.log('🗑️ [ConversationApiClient] Deleting conversation:', conversationId);
+      logger.info('Deleting conversation:', conversationId);
       
       await this.delete(`/conversations/${conversationId}`);
       
-      console.log('✅ [ConversationApiClient] Conversation deleted');
+      logger.info('Conversation deleted');
     } catch (error: any) {
       this.safeLogError('Error deleting conversation', error);
       throw error;

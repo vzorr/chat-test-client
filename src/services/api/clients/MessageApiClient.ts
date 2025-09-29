@@ -1,4 +1,4 @@
-// src/services/api/clients/MessageApiClient.ts
+// src/services/api/clients/MessageApiClient.ts - Updated with AppConfig and centralized Logger
 import { BaseApiClient, BaseApiClientConfig } from '../base/BaseApiClient';
 import { 
   Message, 
@@ -8,6 +8,7 @@ import {
   Attachment
 } from '../../../types/chat';
 import { AppConfig } from '../../../config/AppConfig';
+import { logger } from '../../../utils/Logger';
 
 /**
  * Message API Client - handles message operations only
@@ -32,7 +33,7 @@ export class MessageApiClient extends BaseApiClient {
     total: number;
   }> {
     try {
-      console.log("🔍 [MessageApiClient] Getting messages for conversation:", conversationId);
+      logger.debug('Getting messages for conversation:', conversationId);
       
       const offset = (page - 1) * limit;
       const response = await this.get<any>(
@@ -70,7 +71,7 @@ export class MessageApiClient extends BaseApiClient {
     message: Message;
   }> {
     try {
-      console.log('📤 [MessageApiClient] Sending message');
+      logger.info('Sending message');
       
       const response = await this.post<any>('/messages', payload);
 
@@ -93,14 +94,14 @@ export class MessageApiClient extends BaseApiClient {
    */
   async markAsRead(conversationId: string, messageIds?: string[]): Promise<void> {
     try {
-      console.log('✅ [MessageApiClient] Marking messages as read:', { conversationId, messageIds });
+      logger.debug('Marking messages as read:', { conversationId, messageIds });
       
       await this.post('/messages/read', {
         conversationId,
         messageIds
       });
       
-      console.log('✅ [MessageApiClient] Messages marked as read');
+      logger.debug('Messages marked as read');
     } catch (error: any) {
       this.safeLogError('Error marking messages as read', error);
       throw error;
@@ -115,7 +116,7 @@ export class MessageApiClient extends BaseApiClient {
     message: Message;
   }> {
     try {
-      console.log('✏️ [MessageApiClient] Editing message:', messageId);
+      logger.info('Editing message:', messageId);
       
       const response = await this.put<any>(`/messages/${messageId}`, { content });
 
@@ -138,11 +139,11 @@ export class MessageApiClient extends BaseApiClient {
    */
   async deleteMessage(messageId: string): Promise<void> {
     try {
-      console.log('🗑️ [MessageApiClient] Deleting message:', messageId);
+      logger.info('Deleting message:', messageId);
       
       await this.delete(`/messages/${messageId}`);
       
-      console.log('✅ [MessageApiClient] Message deleted');
+      logger.info('Message deleted');
     } catch (error: any) {
       this.safeLogError('Error deleting message', error);
       throw error;
@@ -157,7 +158,7 @@ export class MessageApiClient extends BaseApiClient {
     message?: Message;
   }> {
     try {
-      console.log('🔍 [MessageApiClient] Getting message by ID:', messageId);
+      logger.debug('Getting message by ID:', messageId);
       
       const response = await this.get<any>(`/messages/${messageId}`);
 
@@ -196,7 +197,7 @@ export class MessageApiClient extends BaseApiClient {
     hasMore: boolean;
   }> {
     try {
-      console.log('🔍 [MessageApiClient] Searching messages:', searchQuery);
+      logger.debug('Searching messages:', searchQuery);
       
       const queryParams = new URLSearchParams();
       queryParams.append('query', searchQuery);
@@ -233,11 +234,11 @@ export class MessageApiClient extends BaseApiClient {
    */
   async addReaction(messageId: string, emoji: string): Promise<void> {
     try {
-      console.log('😀 [MessageApiClient] Adding reaction to message:', { messageId, emoji });
+      logger.debug('Adding reaction to message:', { messageId, emoji });
       
       await this.post(`/messages/${messageId}/reactions`, { emoji });
       
-      console.log('✅ [MessageApiClient] Reaction added');
+      logger.debug('Reaction added');
     } catch (error: any) {
       this.safeLogError('Error adding reaction', error);
       throw error;
@@ -249,11 +250,11 @@ export class MessageApiClient extends BaseApiClient {
    */
   async removeReaction(messageId: string, emoji: string): Promise<void> {
     try {
-      console.log('❌ [MessageApiClient] Removing reaction from message:', { messageId, emoji });
+      logger.debug('Removing reaction from message:', { messageId, emoji });
       
       await this.delete(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`);
       
-      console.log('✅ [MessageApiClient] Reaction removed');
+      logger.debug('Reaction removed');
     } catch (error: any) {
       this.safeLogError('Error removing reaction', error);
       throw error;
@@ -269,7 +270,7 @@ export class MessageApiClient extends BaseApiClient {
     details?: string
   ): Promise<void> {
     try {
-      console.log('🚨 [MessageApiClient] Reporting message:', messageId);
+      logger.info('Reporting message:', messageId);
       
       await this.post('/messages/report', {
         messageId,
@@ -277,7 +278,7 @@ export class MessageApiClient extends BaseApiClient {
         details
       });
       
-      console.log('✅ [MessageApiClient] Message reported');
+      logger.info('Message reported');
     } catch (error: any) {
       this.safeLogError('Error reporting message', error);
       throw error;

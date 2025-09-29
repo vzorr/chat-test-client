@@ -1,4 +1,4 @@
-// src/config/AppConfig.ts - Single Source of Truth for All Configuration
+// src/config/AppConfig.ts - Complete version with all original functionality
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -7,7 +7,9 @@ dotenv.config();
 // ==========================================
 // PLATFORM DETECTION
 // ==========================================
-const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
+const isNodeEnvironment = typeof window === 'undefined' && 
+                         typeof global !== 'undefined' && 
+                         typeof process !== 'undefined';
 const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 const isReactNative = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
 
@@ -148,7 +150,7 @@ export const AppConfig = {
     randomizationFactor: 0.5,
     rememberUpgrade: true,
     closeOnBeforeunload: true,
-    enableLogging: process.env.ENABLE_LOGGING === 'true',
+    enableLogging: process.env.ENABLE_SOCKET_LOGGING === 'true',
   },
   
   // Storage Configuration (Platform-specific)
@@ -158,12 +160,14 @@ export const AppConfig = {
       const storageType = process.env.STORAGE_TYPE;
       if (storageType === 'file') return 'file';
       if (storageType === 'memory') return 'memory';
+      if (storageType === 'localstorage') return 'localstorage';
+      if (storageType === 'async-storage') return 'async-storage';
       
       // Platform defaults
       switch (PLATFORM) {
         case 'react-native': return 'async-storage';
         case 'browser': return 'localstorage';
-        case 'node': return 'memory';
+        case 'node': return process.env.STORAGE_PATH ? 'file' : 'memory';
         default: return 'memory';
       }
     })(),
@@ -278,48 +282,50 @@ export const AppConfig = {
 };
 
 // ==========================================
-// LOGGER UTILITY
+// LOGGER UTILITY - Using the common logger from utils
 // ==========================================
+import { logger } from '../utils/Logger';
+
 export const AppLogger = {
   debug: (...args: any[]): void => {
     if (AppConfig.debug.enabled && AppConfig.debug.logLevel === 'debug') {
-      console.log('[DEBUG]', new Date().toISOString(), ...args);
+      logger.debug(args.join(' '));
     }
   },
   
   info: (...args: any[]): void => {
     if (AppConfig.debug.enabled && ['debug', 'info'].includes(AppConfig.debug.logLevel)) {
-      console.info('[INFO]', new Date().toISOString(), ...args);
+      logger.info(args.join(' '));
     }
   },
   
   warn: (...args: any[]): void => {
     if (AppConfig.debug.enabled && ['debug', 'info', 'warn'].includes(AppConfig.debug.logLevel)) {
-      console.warn('[WARN]', new Date().toISOString(), ...args);
+      logger.warn(args.join(' '));
     }
   },
   
   error: (...args: any[]): void => {
     if (AppConfig.debug.enabled) {
-      console.error('[ERROR]', new Date().toISOString(), ...args);
+      logger.error(args.join(' '));
     }
   },
   
   network: (...args: any[]): void => {
     if (AppConfig.debug.enableNetworkLogging) {
-      console.log('[NETWORK]', new Date().toISOString(), ...args);
+      logger.network(args.join(' '));
     }
   },
   
   socket: (...args: any[]): void => {
     if (AppConfig.debug.enableSocketLogging) {
-      console.log('[SOCKET]', new Date().toISOString(), ...args);
+      logger.socket(args.join(' '));
     }
   },
   
   performance: (...args: any[]): void => {
     if (AppConfig.debug.enablePerformanceLogging) {
-      console.log('[PERF]', new Date().toISOString(), ...args);
+      logger.performance(args.join(' '));
     }
   },
 };
@@ -445,7 +451,7 @@ export const validateConfig = (): { isValid: boolean; errors: string[]; warnings
 if (AppConfig.debug.enabled) {
   const validation = validateConfig();
   
-  AppLogger.info('🚀 AppConfig Initialized', {
+  logger.info('🚀 AppConfig Initialized', {
     platform: AppConfig.platform.OS,
     environment: AppConfig.environment,
     apiUrl: AppConfig.urls.api,
@@ -456,25 +462,25 @@ if (AppConfig.debug.enabled) {
   });
 
   if (AppConfig.user.token) {
-    AppLogger.info('🔐 Authentication configured', {
+    logger.info('🔐 Authentication configured', {
       userId: AppConfig.user.id || 'Not set',
       receiverId: AppConfig.user.receiverId || 'Not set',
     });
   }
 
   if (validation.errors.length > 0) {
-    AppLogger.error('❌ Configuration Errors:', validation.errors);
+    logger.error('❌ Configuration Errors:', validation.errors);
     if (AppConfig.isProduction) {
       throw new Error(`Configuration errors: ${validation.errors.join(', ')}`);
     }
   }
 
   if (validation.warnings.length > 0) {
-    AppLogger.warn('⚠️  Configuration Warnings:', validation.warnings);
+    logger.warn('⚠️  Configuration Warnings:', validation.warnings);
   }
 
   if (validation.errors.length === 0) {
-    AppLogger.info('✅ Configuration validation passed');
+    logger.info('✅ Configuration validation passed');
   }
 }
 
