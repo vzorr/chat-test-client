@@ -1,94 +1,94 @@
+// web/config.js - Unified configuration loader
 /**
- * User configuration for chat client
- * Loads from environment variables or uses defaults
+ * Unified Configuration Loader
+ * Works in both Node.js and Browser (Vite) environments
  */
 
+// Detect environment
+const isVite = typeof import.meta !== 'undefined' && import.meta.env;
+const isNode = typeof process !== 'undefined' && process.env;
+
+// Helper to get env variable (works in both Node and Vite)
+const getEnv = (key) => {
+  if (isVite) {
+    // In Vite, variables are available without VITE_ prefix (thanks to define in vite.config.js)
+    return import.meta.env[key];
+  }
+  if (isNode) {
+    return process.env[key];
+  }
+  return undefined;
+};
+
+// User Profiles
 export const UserProfiles = {
-  customers: [
-    {
-      id: 'customer-1',
-      userId: '550e8400-e29b-41d4-a716-446655440001',
-      name: 'Alice Cooper',
-      email: 'alice@example.com',
-      phone: '+1234567890',
-      role: 'customer',
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.customer1'
-    },
-    {
-      id: 'customer-2',
-      userId: '550e8400-e29b-41d4-a716-446655440002',
-      name: 'Charlie Brown',
-      email: 'charlie@example.com',
-      phone: '+1234567891',
-      role: 'customer',
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.customer2'
-    }
-  ],
-
-  ustas: [
-    {
-      id: 'usta-1',
-      userId: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
-      name: 'Bob Builder',
-      email: 'bob@example.com',
-      phone: '+1234567892',
-      role: 'usta',
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.usta1'
-    },
-    {
-      id: 'usta-2',
-      userId: '091e4c17-47ab-4150-8b45-ea36dd2c2de8',
-      name: 'Dave Plumber',
-      email: 'dave@example.com',
-      phone: '+1234567893',
-      role: 'usta',
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.usta2'
-    }
-  ],
-
-  /**
-   * Get all user profiles
-   */
-  getAll() {
-    return [...this.customers, ...this.ustas];
+  usta: {
+    id: getEnv('USTA_ID'),
+    name: getEnv('USTA_NAME'),
+    email: getEnv('USTA_EMAIL'),
+    phone: getEnv('USTA_PHONE'),
+    role: getEnv('USTA_ROLE') || 'usta',
+    token: getEnv('USTA_TOKEN'),
   },
-
-  /**
-   * Get user profile by ID
-   */
-  getById(id) {
-    return this.getAll().find(user => user.id === id);
+  
+  customer: {
+    id: getEnv('CUSTOMER_ID'),
+    name: getEnv('CUSTOMER_NAME'),
+    email: getEnv('CUSTOMER_EMAIL'),
+    phone: getEnv('CUSTOMER_PHONE'),
+    role: getEnv('CUSTOMER_ROLE') || 'customer',
+    token: getEnv('CUSTOMER_TOKEN'),
   },
-
+  
   /**
-   * Get users by role
+   * Get profile by role
    */
   getByRole(role) {
-    return this[role + 's'] || [];
+    return this[role.toLowerCase()] || this.usta;
   },
-
+  
   /**
-   * Find other users (opposite role)
+   * Get all profiles as array
    */
-  getOtherUsers(currentRole) {
-    const otherRole = currentRole === 'customer' ? 'usta' : 'customer';
-    return this.getByRole(otherRole);
+  getAll() {
+    return [this.usta, this.customer];
+  },
+  
+  /**
+   * Get the other user (for receiver)
+   */
+  getOther(currentRole) {
+    return currentRole.toLowerCase() === 'usta' ? this.customer : this.usta;
   }
 };
 
-/**
- * Chat configuration
- */
+// Job/Conversation Configuration
+export const JobConfig = {
+  id: getEnv('JOB_ID') || `job-${Date.now()}`,
+  title: getEnv('JOB_TITLE') || 'Service Request',
+};
+
+// Default User
+export const defaultUserRole = getEnv('DEFAULT_USER') || 'usta';
+
+// Server Configuration
+export const ServerConfig = {
+  url: getEnv('SERVER_URL') || 'https://myusta.al',
+};
+
+// Chat Configuration
 export const ChatConfig = {
-  // Default job for testing
-  defaultJobId: 'job-test-' + Date.now(),
-  defaultJobTitle: 'Test Service Request',
-  
-  // Message settings
   maxMessageLength: 4000,
   typingIndicatorDelay: 1000,
-  
-  // UI settings
   messagesPerPage: 50,
-  enableDebugLogs: true
+  enableDebugLogs: getEnv('ENABLE_LOGGING') === 'true',
+};
+
+// Export default config object
+export default {
+  UserProfiles,
+  JobConfig,
+  defaultUserRole,
+  ServerConfig,
+  ChatConfig,
 };

@@ -1,4 +1,6 @@
-// src/utils/Logger.ts - Centralized Logger for entire codebase
+// src/utils/Logger.ts - Using existing AppConfig
+
+import { AppConfig } from '../config/AppConfig';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 export type LogContext = 'network' | 'socket' | 'performance' | 'general';
@@ -13,13 +15,6 @@ interface LogEntry {
 }
 
 class Logger {
-  private isDevelopment = process.env.NODE_ENV === 'development';
-  private isProduction = process.env.NODE_ENV === 'production';
-  private logLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
-  private enableNetworkLogging = process.env.ENABLE_NETWORK_LOGGING === 'true';
-  private enableSocketLogging = process.env.ENABLE_SOCKET_LOGGING === 'true';
-  private enablePerformanceLogging = process.env.ENABLE_PERFORMANCE_LOGGING === 'true';
-
   private levelPriority: Record<LogLevel, number> = {
     error: 0,
     warn: 1,
@@ -28,12 +23,13 @@ class Logger {
   };
 
   private shouldLog(level: LogLevel): boolean {
-    return this.levelPriority[level] <= this.levelPriority[this.logLevel];
+    return this.levelPriority[level] <= this.levelPriority[AppConfig.debug.logLevel];
   }
 
   private formatLog(entry: LogEntry): string {
     const { level, message, timestamp } = entry;
-    return `[${level.toUpperCase()}] ${timestamp} - ${message}`;
+    const prefix = AppConfig.isBrowser ? '🌐' : '🖥️';
+    return `${prefix} [${level.toUpperCase()}] ${timestamp} - ${message}`;
   }
 
   private extractErrorInfo(error: any): any {
@@ -53,11 +49,10 @@ class Logger {
     if (error instanceof Error) {
       return {
         message: error.message,
-        stack: this.isDevelopment ? error.stack : undefined
+        stack: AppConfig.isDevelopment ? error.stack : undefined
       };
     }
 
-    // String or other
     return { message: String(error) };
   }
 
@@ -115,20 +110,20 @@ class Logger {
 
   // Specialized loggers
   network(message: string, data?: any): void {
-    if (this.enableNetworkLogging) {
-      console.log(`[NETWORK] ${new Date().toISOString()} - ${message}`, data || '');
+    if (AppConfig.debug.enableNetworkLogging) {
+      console.log(`📡 [NETWORK] ${new Date().toISOString()} - ${message}`, data || '');
     }
   }
 
   socket(message: string, data?: any): void {
-    if (this.enableSocketLogging) {
-      console.log(`[SOCKET] ${new Date().toISOString()} - ${message}`, data || '');
+    if (AppConfig.debug.enableSocketLogging) {
+      console.log(`🔌 [SOCKET] ${new Date().toISOString()} - ${message}`, data || '');
     }
   }
 
   performance(message: string, data?: any): void {
-    if (this.enablePerformanceLogging) {
-      console.log(`[PERF] ${new Date().toISOString()} - ${message}`, data || '');
+    if (AppConfig.debug.enablePerformanceLogging) {
+      console.log(`⚡ [PERF] ${new Date().toISOString()} - ${message}`, data || '');
     }
   }
 }

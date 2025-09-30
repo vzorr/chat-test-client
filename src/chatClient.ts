@@ -31,18 +31,32 @@ import {
 // Import chalk for colors
 const chalk = require('chalk');
 
+
+dotenv.config();
+
+// Simple helper to get env with fallback
+const getEnv = (key: string, fallback: string = ''): string => {
+  return process.env[key] || fallback;
+};
+
 // Configuration from environment variables
+// Configuration - reads from the SAME .env file
 const CONFIG = {
-  TOKEN: process.env.AUTH_TOKEN || '',
-  USER_ID: process.env.USER_ID || '',
-  USER_NAME: process.env.USER_NAME || 'Test User',
-  USER_EMAIL: process.env.USER_EMAIL || 'test@example.com',
-  USER_PHONE: process.env.USER_PHONE || '',
-  USER_ROLE: process.env.USER_ROLE || 'usta',
-  RECEIVER_ID: process.env.RECEIVER_ID || '',
-  RECEIVER_NAME: process.env.RECEIVER_NAME || 'Customer',
-  JOB_ID: process.env.JOB_ID || uuidv4(),
-  JOB_TITLE: process.env.JOB_TITLE || 'Service Request'
+  // Automatically reads USTA profile
+  TOKEN: getEnv('USTA_TOKEN'),
+  USER_ID: getEnv('USTA_ID'),
+  USER_NAME: getEnv('USTA_NAME'),
+  USER_EMAIL: getEnv('USTA_EMAIL'),
+  USER_PHONE: getEnv('USTA_PHONE'),
+  USER_ROLE: getEnv('USTA_ROLE', 'usta'),
+  
+  // Receiver is the customer
+  RECEIVER_ID: getEnv('CUSTOMER_ID'),
+  RECEIVER_NAME: getEnv('CUSTOMER_NAME'),
+  
+  // Job context
+  JOB_ID: getEnv('JOB_ID', `job-${Date.now()}`),
+  JOB_TITLE: getEnv('JOB_TITLE', 'Service Request'),
 };
 
 /**
@@ -612,7 +626,6 @@ class ChatTestClient {
     });
     console.log();
   }
-
 
   /**
  * Show offline queue

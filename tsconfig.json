@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",  // Changed from commonjs
+    "module": "ESNext",
     "lib": ["ES2020", "DOM"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -27,7 +27,11 @@
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    "types": ["node"]
+    "types": ["node"],
+    
+    // Add these for better isolation
+    "isolatedModules": true,           // Helps with Vite/esbuild compatibility
+    "allowImportingTsExtensions": false // Prevents .ts imports in compiled code
   },
   "include": [
     "src/**/*"
@@ -35,8 +39,14 @@
   "exclude": [
     "node_modules",
     "dist",
-    "web",  // Added
+    "web",
     "**/*.spec.ts",
     "**/*.test.ts"
-  ]
+  ],
+  
+  // Add ts-node configuration for development
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
 }
