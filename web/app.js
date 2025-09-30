@@ -1,170 +1,110 @@
-/**
- * Main Chat Application
- * Uses existing ChatService from src/services/ChatService.ts
- */
+// web/app.js - Main application logic for web chat client
+import { chatService } from '../src/services/ChatService.ts';
+import { ConnectionState, MessageStatus } from '../src/types/chat.ts';
 
-import { chatService } from '../src/services/ChatService';
-import { UserProfiles, ChatConfig } from './config.js';
+// Predefined user profiles for testing
+const USER_PROFILES = [
+  {
+    id: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
+    name: 'Babar Khan',
+    role: 'usta',
+    email: 'babar@myusta.al',
+    phone: '+355123456789',
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    receiverId: 'customer-001',
+    receiverName: 'Customer'
+  },
+  {
+    id: 'customer-001',
+    name: 'John Doe',
+    role: 'customer',
+    email: 'john@example.com',
+    phone: '+355987654321',
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    receiverId: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
+    receiverName: 'Babar Khan'
+  }
+];
 
 class ChatApp {
   constructor() {
-    // State
     this.currentUser = null;
     this.conversationId = null;
-    this.otherUser = null;
-    this.cleanupFunctions = [];
-    this.typingTimeout = null;
-
-    // DOM Elements
-    this.elements = {
-      // Role selection
-      roleSelection: document.getElementById('role-selection'),
-      userList: document.getElementById('user-list'),
-      connectBtn: document.getElementById('connect-btn'),
-
-      // Chat interface
-      chatInterface: document.getElementById('chat-interface'),
-      userAvatar: document.getElementById('user-avatar'),
-      userName: document.getElementById('user-name'),
-      userRole: document.getElementById('user-role'),
-      statusDot: document.getElementById('status-dot'),
-      connectionText: document.getElementById('connection-text'),
-      messagesContainer: document.getElementById('messages-container'),
-      messageInput: document.getElementById('message-input'),
-      sendBtn: document.getElementById('send-btn'),
-      typingIndicator: document.getElementById('typing-indicator')
-    };
-
+    this.messageHistory = [];
+    this.jobId = `job-${Date.now()}`;
+    this.jobTitle = 'Service Request';
+    
     this.init();
   }
 
-  /**
-   * Initialize application
-   */
-  async init() {
-    console.log('🚀 Initializing Chat App...');
-
-    // Render user selection
-    this.renderUserList();
-
-    // Setup event listeners
-    this.setupEventListeners();
-
-    // Try to restore session
-    await this.restoreSession();
-
-    console.log('✅ Chat App initialized');
+  init() {
+    this.renderUserSelection();
+    this.attachRoleSelectionEvents();
   }
 
-  /**
-   * Render user selection list
-   */
-  renderUserList() {
-    const users = UserProfiles.getAll();
-    
-    const html = users.map(user => `
-      <li 
-        class="p-4 bg-gray-50 border-2 border-transparent rounded-lg cursor-pointer hover:bg-gray-100 hover:border-indigo-500 transition-all user-item" 
-        data-user-id="${user.id}"
-      >
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-            ${user.name.charAt(0).toUpperCase()}
+  renderUserSelection() {
+    const userList = document.getElementById('user-list');
+    userList.innerHTML = USER_PROFILES.map((user, index) => `
+      <li>
+        <label class="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+          <input 
+            type="radio" 
+            name="user" 
+            value="${index}"
+            class="w-4 h-4 text-indigo-600"
+          />
+          <div class="flex-1">
+            <div class="font-semibold text-gray-800">${user.name}</div>
+            <div class="text-sm text-gray-500">${user.role} • ${user.email}</div>
           </div>
-          <div>
-            <span class="font-semibold block">${user.name}</span>
-            <span class="text-sm text-gray-500 block mt-1">${user.role.toUpperCase()} • ${user.email}</span>
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+            ${user.name.charAt(0)}
           </div>
-        </div>
+        </label>
       </li>
     `).join('');
-
-    this.elements.userList.innerHTML = html;
-
-    // Add click handlers
-    document.querySelectorAll('.user-item').forEach(item => {
-      item.addEventListener('click', () => this.selectUser(item));
-    });
   }
 
-  /**
-   * Handle user selection
-   */
-  selectUser(item) {
-    // Remove previous selection
-    document.querySelectorAll('.user-item').forEach(i => {
-      i.classList.remove('bg-indigo-500', 'text-white', 'border-indigo-500');
-      i.querySelector('.bg-gradient-to-br').classList.remove('hidden');
+  attachRoleSelectionEvents() {
+    const connectBtn = document.getElementById('connect-btn');
+    const radioButtons = document.querySelectorAll('input[name="user"]');
+
+    radioButtons.forEach(radio => {
+      radio.addEventListener('change', () => {
+        connectBtn.disabled = false;
+      });
     });
 
-    // Add selection
-    item.classList.add('bg-indigo-500', 'text-white', 'border-indigo-500');
-    
-    const userId = item.dataset.userId;
-    this.currentUser = UserProfiles.getById(userId);
-    
-    // Enable connect button
-    this.elements.connectBtn.disabled = false;
-    
-    console.log('Selected user:', this.currentUser.name);
-  }
-
-  /**
-   * Setup all event listeners
-   */
-  setupEventListeners() {
-    // Connect button
-    this.elements.connectBtn.addEventListener('click', () => {
-      this.connect();
-    });
-
-    // Send button
-    this.elements.sendBtn.addEventListener('click', () => {
-      this.sendMessage();
-    });
-
-    // Message input - Enter key
-    this.elements.messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
+    connectBtn.addEventListener('click', async () => {
+      const selectedIndex = document.querySelector('input[name="user"]:checked')?.value;
+      if (selectedIndex !== undefined) {
+        this.currentUser = USER_PROFILES[parseInt(selectedIndex)];
+        await this.connectToChat();
       }
     });
-
-    // Message input - Typing indicator
-    this.elements.messageInput.addEventListener('input', () => {
-      this.handleTyping();
-    });
-
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', () => {
-      this.cleanup();
-    });
   }
 
-  /**
-   * Connect to chat service
-   */
-  async connect() {
-    if (!this.currentUser) {
-      alert('Please select a user first');
-      return;
-    }
-
+  async connectToChat() {
     try {
-      console.log('🔌 Connecting to chat service...');
-      this.elements.connectBtn.disabled = true;
-      this.elements.connectBtn.textContent = 'Connecting...';
+      // Show chat interface
+      document.getElementById('role-selection').classList.add('hidden');
+      document.getElementById('chat-interface').classList.remove('hidden');
 
-      // Initialize ChatService with user details
+      // Update header
+      document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
+      document.getElementById('user-name').textContent = this.currentUser.name;
+      document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
+      this.updateConnectionStatus('connecting', 'Connecting...');
+
+      // Initialize chat service
       await chatService.initialize(
-        this.currentUser.userId,
+        this.currentUser.id,
         this.currentUser.role,
         this.currentUser.token,
-        null, // No Redux store in browser
+        undefined,
         {
-          id: this.currentUser.userId,
-          externalId: this.currentUser.userId,
+          id: this.currentUser.id,
+          externalId: this.currentUser.id,
           name: this.currentUser.name,
           email: this.currentUser.email,
           phone: this.currentUser.phone,
@@ -172,382 +112,278 @@ class ChatApp {
         }
       );
 
-      console.log('✅ Connected to chat service');
+      // Setup event listeners
+      this.setupEventListeners();
 
-      // Find or create conversation with other user
+      // Setup conversation
       await this.setupConversation();
 
-      // Setup event listeners for chat service
-      this.setupChatServiceListeners();
+      // Attach input events
+      this.attachInputEvents();
 
-      // Show chat interface
-      this.showChatInterface();
-
-      // Save session
-      this.saveSession();
-
-      console.log('✅ Chat ready');
+      this.updateConnectionStatus('connected', 'Connected');
+      console.log('✅ Chat connected successfully');
 
     } catch (error) {
       console.error('❌ Connection failed:', error);
+      this.updateConnectionStatus('error', 'Connection Error');
       alert('Failed to connect: ' + error.message);
-      this.elements.connectBtn.disabled = false;
-      this.elements.connectBtn.textContent = 'Connect to Chat';
     }
   }
 
-  /**
-   * Setup or find conversation
-   */
+  setupEventListeners() {
+    // Connection state changes
+    chatService.onConnectionStateChange((state) => {
+      const stateMap = {
+        [ConnectionState.CONNECTED]: { status: 'connected', text: 'Connected' },
+        [ConnectionState.CONNECTING]: { status: 'connecting', text: 'Connecting...' },
+        [ConnectionState.RECONNECTING]: { status: 'connecting', text: 'Reconnecting...' },
+        [ConnectionState.DISCONNECTED]: { status: 'disconnected', text: 'Disconnected' },
+        [ConnectionState.ERROR]: { status: 'error', text: 'Error' }
+      };
+      
+      const { status, text } = stateMap[state] || stateMap[ConnectionState.DISCONNECTED];
+      this.updateConnectionStatus(status, text);
+    });
+
+    // New messages
+    chatService.onNewMessage((message) => {
+      console.log('💬 New message:', message);
+      this.messageHistory.push(message);
+      this.renderMessage(message);
+    });
+
+    // Message sent
+    chatService.onMessageSent((data) => {
+      console.log('✅ Message sent:', data.messageId);
+    });
+
+    // Message error
+    chatService.onMessageSendError((data) => {
+      console.error('❌ Send error:', data.error);
+      this.showError('Failed to send message');
+    });
+
+    // Typing indicator
+    chatService.onTyping((userId, isTyping) => {
+      if (userId !== this.currentUser.id) {
+        this.showTypingIndicator(isTyping);
+      }
+    });
+  }
+
   async setupConversation() {
-    // Find other user (opposite role)
-    const otherUsers = UserProfiles.getOtherUsers(this.currentUser.role);
-    this.otherUser = otherUsers[0]; // Take first available
-
-    if (!this.otherUser) {
-      throw new Error('No other user available for chat');
-    }
-
-    console.log('🔍 Setting up conversation with:', this.otherUser.name);
-
-    // Find or create job conversation
+    console.log('🔍 Setting up conversation...');
+    
     const conversation = await chatService.findOrCreateJobConversation(
-      ChatConfig.defaultJobId,
-      this.otherUser.userId
+      this.jobId,
+      this.currentUser.receiverId
     );
 
     this.conversationId = conversation.id;
     console.log('✅ Conversation ready:', this.conversationId);
 
     // Load existing messages
-    await this.loadMessages();
-  }
+    const result = await chatService.loadMessages(this.conversationId, {
+      page: 1,
+      limit: 50
+    });
 
-  /**
-   * Load messages for conversation
-   */
-  async loadMessages() {
-    if (!this.conversationId) return;
+    this.messageHistory = result.messages;
+    console.log(`📜 Loaded ${result.messages.length} messages`);
 
-    try {
-      console.log('📥 Loading messages...');
+    // Render messages
+    result.messages.forEach(msg => this.renderMessage(msg, false));
 
-      const result = await chatService.loadMessages(this.conversationId, {
-        page: 1,
-        limit: ChatConfig.messagesPerPage
-      });
-
-      console.log(`✅ Loaded ${result.messages.length} messages`);
-
-      // Render messages
-      result.messages.forEach(message => {
-        this.renderMessage(message, message.senderId === this.currentUser.userId);
-      });
-
-      this.scrollToBottom();
-
-    } catch (error) {
-      console.error('Failed to load messages:', error);
+    // Send greeting if new conversation
+    if (result.messages.length === 0) {
+      setTimeout(() => {
+        chatService.sendTextMessage(
+          this.conversationId,
+          `Hello! I'm ${this.currentUser.name}. How can I help you today?`,
+          this.currentUser.receiverId
+        );
+      }, 1000);
     }
   }
 
-  /**
-   * Setup ChatService event listeners
-   */
-  setupChatServiceListeners() {
-    console.log('📡 Setting up event listeners...');
+  attachInputEvents() {
+    const input = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
 
-    // Connection state changes
-    const cleanup1 = chatService.onConnectionStateChange((state, details) => {
-      console.log('Connection state:', state);
-      
-      const isConnected = state === 'connected';
-      this.updateConnectionStatus(isConnected);
+    let typingTimeout;
 
-      if (details?.error) {
-        console.error('Connection error:', details.error);
+    input.addEventListener('input', () => {
+      // Send typing indicator
+      if (this.conversationId) {
+        chatService.sendTypingIndicator(
+          this.conversationId,
+          this.currentUser.receiverId,
+          true
+        );
+
+        // Clear previous timeout
+        clearTimeout(typingTimeout);
+
+        // Stop typing after 3 seconds
+        typingTimeout = setTimeout(() => {
+          chatService.sendTypingIndicator(
+            this.conversationId,
+            this.currentUser.receiverId,
+            false
+          );
+        }, 3000);
       }
     });
-    this.cleanupFunctions.push(cleanup1);
 
-    // New messages
-    const cleanup2 = chatService.onNewMessage((message) => {
-      console.log('💬 New message:', message);
-      
-      const isMine = message.senderId === this.currentUser.userId;
-      this.renderMessage(message, isMine);
-      
-      if (!isMine) {
-        this.scrollToBottom();
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.handleSend();
       }
     });
-    this.cleanupFunctions.push(cleanup2);
 
-    // Message sent confirmation
-    const cleanup3 = chatService.onMessageSent((data) => {
-      console.log('✅ Message sent:', data.messageId);
-      // Update message status in UI if needed
+    sendBtn.addEventListener('click', () => {
+      this.handleSend();
     });
-    this.cleanupFunctions.push(cleanup3);
-
-    // Message send errors
-    const cleanup4 = chatService.onMessageSendError((data) => {
-      console.error('❌ Message failed:', data.error);
-      alert('Failed to send message: ' + data.error);
-    });
-    this.cleanupFunctions.push(cleanup4);
-
-    // Typing indicators
-    const cleanup5 = chatService.onTyping((userId, isTyping) => {
-      if (userId !== this.currentUser.userId) {
-        console.log('✏️ Other user typing:', isTyping);
-        this.showTypingIndicator(isTyping);
-      }
-    });
-    this.cleanupFunctions.push(cleanup5);
-
-    console.log('✅ Event listeners ready');
   }
 
-  /**
-   * Send message
-   */
-  async sendMessage() {
-    const content = this.elements.messageInput.value.trim();
-    
-    if (!content) return;
-    if (!this.conversationId || !this.otherUser) {
-      alert('Conversation not ready');
-      return;
-    }
+  async handleSend() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
 
-    if (content.length > ChatConfig.maxMessageLength) {
-      alert(`Message too long. Max ${ChatConfig.maxMessageLength} characters.`);
-      return;
-    }
+    if (!text || !this.conversationId) return;
 
     try {
       // Clear input immediately
-      this.elements.messageInput.value = '';
-      
-      console.log('📤 Sending message...');
+      input.value = '';
 
-      // Send via ChatService
-      const message = await chatService.sendTextMessage(
+      // Stop typing indicator
+      chatService.sendTypingIndicator(
         this.conversationId,
-        content,
-        this.otherUser.userId
+        this.currentUser.receiverId,
+        false
       );
 
-      console.log('✅ Message sent:', message.id);
-
-      // Render message (will show as "sending" initially)
-      this.renderMessage(message, true);
-      this.scrollToBottom();
+      // Send message
+      await chatService.sendTextMessage(
+        this.conversationId,
+        text,
+        this.currentUser.receiverId
+      );
 
     } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Failed to send message');
+      console.error('❌ Failed to send:', error);
+      this.showError('Failed to send message');
+      // Restore text in input
+      input.value = text;
     }
   }
 
-  /**
-   * Handle typing indicator
-   */
-  handleTyping() {
-    if (!this.conversationId || !this.otherUser) return;
+  renderMessage(message, animate = true) {
+    const container = document.getElementById('messages-container');
+    const isMine = message.senderId === this.currentUser.id;
+    const statusIcon = this.getStatusIcon(message.status);
 
-    // Send typing indicator
-    chatService.sendTypingIndicator(
-      this.conversationId,
-      this.otherUser.userId,
-      true
-    );
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message flex ${isMine ? 'justify-end' : 'justify-start'} mb-4`;
+    
+    if (!animate) {
+      messageDiv.style.animation = 'none';
+    }
 
-    // Clear previous timeout
-    clearTimeout(this.typingTimeout);
-
-    // Stop typing after delay
-    this.typingTimeout = setTimeout(() => {
-      chatService.sendTypingIndicator(
-        this.conversationId,
-        this.otherUser.userId,
-        false
-      );
-    }, ChatConfig.typingIndicatorDelay);
-  }
-
-  /**
-   * Render message in UI
-   */
-  renderMessage(message, isSent) {
-    const messageEl = document.createElement('div');
-    messageEl.className = `message max-w-[70%] mb-4 ${isSent ? 'ml-auto' : ''}`;
-    messageEl.dataset.messageId = message.id;
-
-    const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    const statusIcons = {
-      sending: '⏳',
-      sent: '✓',
-      delivered: '✓✓',
-      read: '👁️',
-      failed: '❌',
-      queued: '📥'
-    };
-
-    messageEl.innerHTML = `
-      <div class="px-4 py-3 rounded-xl break-words ${
-        isSent
-          ? 'bg-indigo-500 text-white rounded-br-sm'
-          : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
-      }">
-        ${this.escapeHtml(message.content)}
-      </div>
-      <div class="text-xs opacity-60 mt-1 ${isSent ? 'text-right' : 'text-left'} text-gray-600">
-        ${time} ${isSent && message.status ? statusIcons[message.status] || '' : ''}
+    messageDiv.innerHTML = `
+      <div class="max-w-[70%]">
+        ${!isMine ? `<div class="text-xs text-gray-500 mb-1 ml-2">${this.currentUser.receiverName}</div>` : ''}
+        <div class="rounded-2xl px-4 py-3 ${
+          isMine 
+            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm' 
+            : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
+        }">
+          <div class="break-words">${this.escapeHtml(message.content)}</div>
+          <div class="text-xs mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
+            <span>${this.formatTime(message.timestamp)}</span>
+            ${isMine ? `<span>${statusIcon}</span>` : ''}
+          </div>
+        </div>
       </div>
     `;
 
-    this.elements.messagesContainer.appendChild(messageEl);
+    container.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
   }
 
-  /**
-   * Show/hide typing indicator
-   */
-  showTypingIndicator(show) {
-    this.elements.typingIndicator.classList.toggle('hidden', !show);
-    if (show) {
-      this.scrollToBottom();
-    }
+  getStatusIcon(status) {
+    const icons = {
+      [MessageStatus.SENDING]: '⏳',
+      [MessageStatus.SENT]: '✓',
+      [MessageStatus.DELIVERED]: '✓✓',
+      [MessageStatus.READ]: '✓✓',
+      [MessageStatus.FAILED]: '❌',
+      [MessageStatus.QUEUED]: '📥',
+      [MessageStatus.EXPIRED]: '⏰'
+    };
+    return icons[status] || '';
   }
 
-  /**
-   * Update connection status UI
-   */
-  updateConnectionStatus(connected) {
-    if (connected) {
-      this.elements.statusDot.classList.remove('bg-gray-300');
-      this.elements.statusDot.classList.add('bg-green-500', 'connected');
-      this.elements.connectionText.textContent = 'Connected';
-      this.elements.connectionText.classList.remove('text-gray-600');
-      this.elements.connectionText.classList.add('text-green-600');
+  formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+
+  updateConnectionStatus(status, text) {
+    const statusDot = document.getElementById('status-dot');
+    const connectionText = document.getElementById('connection-text');
+
+    const colors = {
+      connected: 'bg-green-500',
+      connecting: 'bg-yellow-500',
+      disconnected: 'bg-gray-300',
+      error: 'bg-red-500'
+    };
+
+    statusDot.className = `w-2 h-2 rounded-full ${colors[status] || colors.disconnected}`;
+    
+    if (status === 'connected') {
+      statusDot.classList.add('connected');
     } else {
-      this.elements.statusDot.classList.remove('bg-green-500', 'connected');
-      this.elements.statusDot.classList.add('bg-gray-300');
-      this.elements.connectionText.textContent = 'Disconnected';
-      this.elements.connectionText.classList.remove('text-green-600');
-      this.elements.connectionText.classList.add('text-gray-600');
+      statusDot.classList.remove('connected');
+    }
+
+    connectionText.textContent = text;
+  }
+
+  showTypingIndicator(show) {
+    const indicator = document.getElementById('typing-indicator');
+    if (show) {
+      indicator.classList.remove('hidden');
+    } else {
+      indicator.classList.add('hidden');
     }
   }
 
-  /**
-   * Show chat interface
-   */
-  showChatInterface() {
-    this.elements.roleSelection.classList.add('hidden');
-    this.elements.chatInterface.classList.remove('hidden');
-    this.elements.chatInterface.classList.add('flex');
-
-    // Update header
-    this.elements.userAvatar.textContent = this.currentUser.name.charAt(0).toUpperCase();
-    this.elements.userName.textContent = this.currentUser.name;
-    this.elements.userRole.textContent = this.currentUser.role.toUpperCase();
-
-    // Focus message input
-    this.elements.messageInput.focus();
+  showError(message) {
+    // Simple alert for now - could be improved with toast notifications
+    console.error(message);
   }
 
-  /**
-   * Scroll messages to bottom
-   */
-  scrollToBottom() {
-    this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
-  }
-
-  /**
-   * Save session to localStorage
-   */
-  saveSession() {
-    try {
-      const session = {
-        userId: this.currentUser.id,
-        conversationId: this.conversationId,
-        timestamp: Date.now()
-      };
-      localStorage.setItem('chat_session', JSON.stringify(session));
-    } catch (error) {
-      console.error('Failed to save session:', error);
-    }
-  }
-
-  /**
-   * Restore previous session
-   */
-  async restoreSession() {
-    try {
-      const session = JSON.parse(localStorage.getItem('chat_session'));
-      
-      if (!session) return;
-
-      // Check if session is not too old (24 hours)
-      const age = Date.now() - session.timestamp;
-      if (age > 24 * 60 * 60 * 1000) {
-        localStorage.removeItem('chat_session');
-        return;
-      }
-
-      // Auto-select user and connect
-      const user = UserProfiles.getById(session.userId);
-      if (user) {
-        console.log('🔄 Restoring session for:', user.name);
-        this.currentUser = user;
-        // You could auto-connect here if desired
-      }
-
-    } catch (error) {
-      console.error('Failed to restore session:', error);
-    }
-  }
-
-  /**
-   * Escape HTML to prevent XSS
-   */
   escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-  }
-
-  /**
-   * Cleanup on app close
-   */
-  async cleanup() {
-    console.log('🧹 Cleaning up...');
-
-    // Remove event listeners
-    this.cleanupFunctions.forEach(cleanup => cleanup());
-    this.cleanupFunctions = [];
-
-    // Disconnect chat service
-    try {
-      await chatService.disconnect();
-    } catch (error) {
-      console.error('Error disconnecting:', error);
-    }
-
-    console.log('✅ Cleanup complete');
   }
 }
 
 // Initialize app when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    window.chatApp = new ChatApp();
+    new ChatApp();
   });
 } else {
-  window.chatApp = new ChatApp();
+  new ChatApp();
 }
