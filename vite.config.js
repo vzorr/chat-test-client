@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => {
   return {
     root: 'web',
     
+    // --- START: Port Configuration Added ---
+    server: {
+      // Set the development server port to 3000 as requested
+      port: 3000, 
+      strictPort: true, // Ensures the port is strictly 3000
+    },
+    // --- END: Port Configuration Added ---
+
     // Expose env variables to the client
     define: {
       // User profiles
@@ -28,14 +36,14 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.CUSTOMER_TOKEN': JSON.stringify(env.CUSTOMER_TOKEN),
       'import.meta.env.JOB_ID': JSON.stringify(env.JOB_ID),
       'import.meta.env.JOB_TITLE': JSON.stringify(env.JOB_TITLE),
-      'import.meta.env.DEFAULT_USER': JSON.stringify(env.DEFAULT_USER),
-      'import.meta.env.SERVER_URL': JSON.stringify(env.SERVER_URL),
+      'import.meta.env.DEFAULT_USER': JSON.stringify(env.DEFAULT_USER || 'usta'),
       
-      // Logging configuration
-      'import.meta.env.NODE_ENV': JSON.stringify(env.NODE_ENV || 'development'),
-      'import.meta.env.ENABLE_LOGGING': JSON.stringify(env.ENABLE_LOGGING || 'true'),
-      'import.meta.env.LOG_LEVEL': JSON.stringify(env.LOG_LEVEL || 'debug'),
-      'import.meta.env.ENABLE_NETWORK_LOGGING': JSON.stringify(env.ENABLE_NETWORK_LOGGING || 'true'),
+      // API Configuration
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL),
+      'import.meta.env.VITE_REALTIME_URL': JSON.stringify(env.VITE_REALTIME_URL),
+
+      // Logging Configuration
+      'import.meta.env.ENABLE_CONSOLE_LOGGING': JSON.stringify(env.ENABLE_CONSOLE_LOGGING || 'true'),
       'import.meta.env.ENABLE_SOCKET_LOGGING': JSON.stringify(env.ENABLE_SOCKET_LOGGING || 'true'),
       'import.meta.env.ENABLE_PERFORMANCE_LOGGING': JSON.stringify(env.ENABLE_PERFORMANCE_LOGGING || 'true'),
       
@@ -69,20 +77,10 @@ export default defineConfig(({ mode }) => {
 
     build: {
       target: 'es2020',
-      outDir: '../dist/web',
-      commonjsOptions: {
-        include: [/node_modules/],
-        ignore: (id) => id.includes('react-native')
-      }
-    },
-
-    server: {
-      port: 5173,
-      open: true,
-      fs: {
-        strict: false,
-        allow: ['..']
-      }
+      outDir: 'dist/web', // Ensure output directory is set correctly
+      emptyOutDir: true,
+      sourcemap: true,
+      minify: 'esbuild'
     }
   };
 });

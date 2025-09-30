@@ -42,59 +42,48 @@ import {
 // Import store types
 import { IChatStore, IChatActions, NoOpStore } from '../types/store';
 
+// =========================================================================
+// FIX: Replace dynamic 'require' for Redux actions with static 'import'
+// =========================================================================
+// Since Redux is a project dependency, we can safely use a static import
+// and let the bundler (Vite) handle the resolution.
+import * as messagingReducer from '../stores/reducer/messagingReducer';
+
 // Platform detection
 const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
-const Platform = isNodeEnvironment 
-  ? { OS: 'node', Version: process.version } 
-  : require('react-native').Platform;
 
-// Import Redux actions (or mock for Node)
-let defaultActions: IChatActions;
-if (isNodeEnvironment) {
-  const messagingReducer = require('../stores/reducer/messagingReducer');
-  defaultActions = {
-    setInitialized: messagingReducer.setInitialized,
-    setConnectionState: messagingReducer.setConnectionState,
-    handleNewMessage: messagingReducer.handleNewMessage,
-    markConversationAsRead: messagingReducer.markConversationAsRead,
-    setActiveConversation: messagingReducer.setActiveConversation,
-    updateTypingUsers: messagingReducer.updateTypingUsers,
-    resetMessagingState: messagingReducer.resetMessagingState,
-    updateConversationMetadata: messagingReducer.updateConversationMetadata,
-    removeConversation: messagingReducer.removeConversation,
-    syncConversations: messagingReducer.syncConversations,
-  };
-} else {
-  try {
-    const messagingReducer = require('../stores/reducer/messagingReducer');
-    defaultActions = {
-      setInitialized: messagingReducer.setInitialized,
-      setConnectionState: messagingReducer.setConnectionState,
-      handleNewMessage: messagingReducer.handleNewMessage,
-      markConversationAsRead: messagingReducer.markConversationAsRead,
-      setActiveConversation: messagingReducer.setActiveConversation,
-      updateTypingUsers: messagingReducer.updateTypingUsers,
-      resetMessagingState: messagingReducer.resetMessagingState,
-      updateConversationMetadata: messagingReducer.updateConversationMetadata,
-      removeConversation: messagingReducer.removeConversation,
-      syncConversations: messagingReducer.syncConversations,
-    };
-  } catch (error) {
-    console.warn('Redux actions not available, using no-op actions');
-    defaultActions = {
-      setInitialized: (initialized: boolean) => ({ type: 'setInitialized', payload: initialized }),
-      setConnectionState: (state: any) => ({ type: 'setConnectionState', payload: state }),
-      handleNewMessage: (data: any) => ({ type: 'handleNewMessage', payload: data }),
-      markConversationAsRead: (id: string) => ({ type: 'markConversationAsRead', payload: id }),
-      setActiveConversation: (id: string | null) => ({ type: 'setActiveConversation', payload: id }),
-      updateTypingUsers: (data: any) => ({ type: 'updateTypingUsers', payload: data }),
-      resetMessagingState: () => ({ type: 'resetMessagingState' }),
-      updateConversationMetadata: (data: any) => ({ type: 'updateConversationMetadata', payload: data }),
-      removeConversation: (id: string) => ({ type: 'removeConversation', payload: id }),
-      syncConversations: (conversations: any) => ({ type: 'syncConversations', payload: conversations }),
-    };
-  }
-}
+// FIX: Change `require('react-native')` to a safe implementation
+// We'll use a local variable and rely on the Vite alias for `react-native`.
+// If the environment is not Node, we will assign the shim's Platform object.
+let Platform: { OS: 'node' | 'web' | 'ios' | 'android', Version: string | undefined } = {
+  OS: isNodeEnvironment ? 'node' : 'web',
+  Version: isNodeEnvironment ? process.version : 'v-shim'
+};
+
+// This line is prone to error if the bundler does not resolve the conditional require correctly.
+// Instead of the original line 44:
+// const Platform = isNodeEnvironment 
+//   ? { OS: 'node', Version: process.version } 
+//   : require('react-native').Platform; 
+// We are skipping the runtime require and relying on the static assignment above.
+
+// Define default actions using the static import
+const defaultActions: IChatActions = {
+  setInitialized: messagingReducer.setInitialized,
+  setConnectionState: messagingReducer.setConnectionState,
+  handleNewMessage: messagingReducer.handleNewMessage,
+  markConversationAsRead: messagingReducer.markConversationAsRead,
+  setActiveConversation: messagingReducer.setActiveConversation,
+  updateTypingUsers: messagingReducer.updateTypingUsers,
+  resetMessagingState: messagingReducer.resetMessagingState,
+  updateConversationMetadata: messagingReducer.updateConversationMetadata,
+  removeConversation: messagingReducer.removeConversation,
+  syncConversations: messagingReducer.syncConversations,
+};
+// =========================================================================
+// END FIX
+// =========================================================================
+
 
 // Configuration constants
 const CHAT_CONFIG = {

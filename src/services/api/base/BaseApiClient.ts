@@ -1,4 +1,4 @@
-// src/services/api/base/BaseApiClient.ts - Fixed and Cleaned Implementation
+// src/services/api/base/BaseApiClient.ts - Fixed Implementation
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -56,6 +56,28 @@ export class BaseApiClient {
   protected clientType: string;
   
   private requestMetadata = new WeakMap<InternalAxiosRequestConfig, RequestMetadata>();
+  
+  // Browser-restricted headers that should never be set from JavaScript
+  private static readonly BROWSER_RESTRICTED_HEADERS = [
+    'user-agent',
+    'accept-encoding',
+    'host',
+    'origin',
+    'referer',
+    'connection',
+    'content-length',
+    'cookie',
+    'cookie2',
+    'content-transfer-encoding',
+    'date',
+    'expect',
+    'keep-alive',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'via'
+  ];
 
   constructor(config: BaseApiClientConfig = {}) {
     this.config = {
@@ -82,28 +104,50 @@ export class BaseApiClient {
   // ==========================================
 
   private createAxiosInstance(): AxiosInstance {
+    const headers = this.buildHeaders();
+    
+    return axios.create({
+      baseURL: this.config.baseUrl,
+      timeout: this.config.timeout,
+      headers,
+      withCredentials: true, // Important for CORS with cookies
+    });
+  }
+
+  private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-App-Version': '2.0.0',
       'X-Platform': AppConfig.platform.OS,
       'X-Environment': AppConfig.environment,
-      ...this.config.headers,
     };
 
+    // Add custom headers from config
+    if (this.config.headers) {
+      Object.entries(this.config.headers).forEach(([key, value]) => {
+        // Skip browser-restricted headers
+        if (!this.isBrowserRestrictedHeader(key)) {
+          headers[key] = value;
+        } else {
+          logger.debug(`Skipping browser-restricted header: ${key}`);
+        }
+      });
+    }
+
+    // Add authorization token if available
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    if (this.config.enableCompression) {
-      headers['Accept-Encoding'] = 'gzip, deflate';
-    }
+    // Note: Do NOT add Accept-Encoding or User-Agent headers
+    // The browser will add these automatically
 
-    return axios.create({
-      baseURL: this.config.baseUrl,
-      timeout: this.config.timeout,
-      headers,
-    });
+    return headers;
+  }
+
+  private isBrowserRestrictedHeader(headerName: string): boolean {
+    return BaseApiClient.BROWSER_RESTRICTED_HEADERS.includes(headerName.toLowerCase());
   }
 
   // ==========================================
@@ -114,6 +158,9 @@ export class BaseApiClient {
     // Request interceptor
     this.axiosInstance.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
+        // Clean headers before sending
+        this.cleanRequestHeaders(config);
+        
         const metadata: RequestMetadata = {
           startTime: Date.now(),
           retryCount: 0,
@@ -123,11 +170,13 @@ export class BaseApiClient {
         this.requestMetadata.set(config, metadata);
         config._metadata = metadata;
 
-        logger.network('API Request', {
-          method: config.method?.toUpperCase(),
-          url: `${config.baseURL}${config.url}`,
-          headers: this.sanitizeHeaders(config.headers)
-        });
+        if (this.config.enableLogging) {
+          logger.network('API Request', {
+            method: config.method?.toUpperCase(),
+            url: `${config.baseURL}${config.url}`,
+            headers: this.sanitizeHeaders(config.headers)
+          });
+        }
 
         return config;
       },
@@ -143,11 +192,13 @@ export class BaseApiClient {
         const metadata = this.requestMetadata.get(response.config as InternalAxiosRequestConfig);
         const duration = metadata ? Date.now() - metadata.startTime : 0;
 
-        logger.network('API Response', {
-          status: response.status,
-          url: response.config.url,
-          duration: `${duration}ms`
-        });
+        if (this.config.enableLogging) {
+          logger.network('API Response', {
+            status: response.status,
+            url: response.config.url,
+            duration: `${duration}ms`
+          });
+        }
 
         this.requestMetadata.delete(response.config as InternalAxiosRequestConfig);
         return response;
@@ -162,15 +213,16 @@ export class BaseApiClient {
 
         logger.error('API Error', error, {
           url: originalRequest?.url,
-          status: error.response?.status
+          status: error.response?.status,
+          data: error.response?.data
         });
 
-        // Handle 401
+        // Handle 401 Unauthorized
         if (error.response?.status === 401 && !originalRequest._retry) {
           return this.handleUnauthorized(originalRequest, error);
         }
 
-        // Handle retries
+        // Handle retries for network errors and specific status codes
         if (this.shouldRetry(error) && !originalRequest._retry) {
           const metadata = this.requestMetadata.get(originalRequest) || originalRequest._metadata;
           if (metadata && metadata.retryCount < this.config.retries) {
@@ -182,6 +234,51 @@ export class BaseApiClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  private cleanRequestHeaders(config: InternalAxiosRequestConfig): void {
+    if (!config.headers) return;
+    
+    // Remove any browser-restricted headers that might have been added
+    BaseApiClient.BROWSER_RESTRICTED_HEADERS.forEach(restrictedHeader => {
+      const headerKeys = Object.keys(config.headers);
+      headerKeys.forEach(key => {
+        if (key.toLowerCase() === restrictedHeader) {
+          delete config.headers[key];
+          if (this.config.enableLogging) {
+            logger.debug(`Removed browser-restricted header: ${key}`);
+          }
+        }
+      });
+    });
+
+    // Ensure required headers are present (except for FormData)
+    const isFormData = config.data instanceof FormData;
+    if (!isFormData) {
+      // Ensure Content-Type is set for non-FormData requests
+      if (!config.headers['Content-Type']) {
+        config.headers['Content-Type'] = 'application/json';
+      }
+    } else {
+      // For FormData, let the browser set the Content-Type with boundary
+      delete config.headers['Content-Type'];
+    }
+
+    // Ensure our custom headers are present
+    if (!config.headers['X-App-Version']) {
+      config.headers['X-App-Version'] = '2.0.0';
+    }
+    if (!config.headers['X-Platform']) {
+      config.headers['X-Platform'] = AppConfig.platform.OS;
+    }
+    if (!config.headers['X-Environment']) {
+      config.headers['X-Environment'] = AppConfig.environment;
+    }
+
+    // Add authorization if we have a token and it's not already set
+    if (this.token && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${this.token}`;
+    }
   }
 
   // ==========================================
@@ -235,6 +332,9 @@ export class BaseApiClient {
     await this.delay(delay);
     originalRequest._retry = false;
     
+    // Clean headers again before retry
+    this.cleanRequestHeaders(originalRequest);
+    
     return this.axiosInstance(originalRequest);
   }
 
@@ -246,7 +346,7 @@ export class BaseApiClient {
     const statusCode = error.response?.status;
     
     if (!statusCode) {
-      return true; // Network errors
+      return true; // Network errors - retry
     }
     
     const retryableStatusCodes = [408, 429, 500, 502, 503, 504];
@@ -315,19 +415,28 @@ export class BaseApiClient {
     formData: FormData,
     config?: AxiosRequestConfig & { onUploadProgress?: (percent: number) => void }
   ): Promise<any> {
-    const response = await this.axiosInstance.post(url, formData, {
+    // For FormData, we need to let the browser set the Content-Type with boundary
+    const formDataConfig: AxiosRequestConfig = {
       ...config,
       headers: { 
         ...config?.headers,
-        'Content-Type': 'multipart/form-data' 
+        // Don't set Content-Type - let browser handle it for FormData
       },
       timeout: config?.timeout || AppConfig.chat.uploadTimeout || 60000,
       onUploadProgress: config?.onUploadProgress ? (progressEvent: any) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        config.onUploadProgress!(percentCompleted);
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          config.onUploadProgress!(percentCompleted);
+        }
       } : undefined,
-    });
+    };
     
+    // Remove Content-Type if it exists (browser will set it with boundary)
+    if (formDataConfig.headers && 'Content-Type' in formDataConfig.headers) {
+      delete formDataConfig.headers['Content-Type'];
+    }
+    
+    const response = await this.axiosInstance.post(url, formData, formDataConfig);
     return response.data;
   }
 
@@ -348,6 +457,11 @@ export class BaseApiClient {
   }
 
   setHeader(key: string, value: string): void {
+    // Check if it's a browser-restricted header
+    if (this.isBrowserRestrictedHeader(key)) {
+      logger.warn(`Cannot set browser-restricted header: ${key}`);
+      return;
+    }
     this.axiosInstance.defaults.headers.common[key] = value;
   }
 
