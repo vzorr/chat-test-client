@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "ESNext",  // Changed from commonjs
     "lib": ["ES2020", "DOM"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -35,6 +35,7 @@
   "exclude": [
     "node_modules",
     "dist",
+    "web",  // Added
     "**/*.spec.ts",
     "**/*.test.ts"
   ]

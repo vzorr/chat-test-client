@@ -1,5 +1,15 @@
 // src/services/implementations/storage/AsyncStorageService.ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+
+let AsyncStorage: any;
+if (typeof window !== 'undefined') {
+  // Browser environment - will be resolved by Vite alias
+  AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+} else {
+  // Node/RN environment
+  AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+}
+
 import { IStorageService } from '../../interfaces';
 
 export class AsyncStorageService implements IStorageService {

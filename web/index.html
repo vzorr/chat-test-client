@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Test Client</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .connected {
+      animation: pulse 2s infinite;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message {
+      animation: slideIn 0.2s ease-out;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    .typing-dot {
+      animation: typing 1.4s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  </style>
+</head>
+<body class="h-screen overflow-hidden bg-gray-100">
+  
+  <!-- Role Selection Screen -->
+  <div id="role-selection" class="flex items-center justify-center h-screen bg-gradient-to-br from-indigo-500 to-purple-600">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4">
+      <h1 class="text-2xl font-bold text-gray-800 text-center mb-6">Select User Profile</h1>
+      <ul class="space-y-3" id="user-list">
+        <!-- Populated by app.js -->
+      </ul>
+      <button 
+        class="w-full mt-6 px-6 py-3 bg-indigo-500 text-white rounded-lg font-semibold hover:bg-indigo-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors" 
+        id="connect-btn" 
+        disabled
+      >
+        Connect to Chat
+      </button>
+    </div>
+  </div>
+
+  <!-- Chat Interface -->
+  <div id="chat-interface" class="hidden h-screen flex flex-col">
+    
+    <!-- Header -->
+    <div class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold" id="user-avatar"></div>
+        <div>
+          <div class="font-semibold text-gray-800" id="user-name"></div>
+          <div class="text-sm text-gray-500" id="user-role"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <span class="w-2 h-2 rounded-full bg-gray-300" id="status-dot"></span>
+        <span id="connection-text" class="text-gray-600">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- Messages Container -->
+    <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="messages-container">
+      <!-- Messages populated by app.js -->
+    </div>
+
+    <!-- Typing Indicator -->
+    <div id="typing-indicator" class="hidden px-6 pb-2">
+      <div class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-xl shadow-sm">
+        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+      </div>
+    </div>
+
+    <!-- Input Container -->
+    <div class="bg-white border-t border-gray-200 px-6 py-4 flex gap-3">
+      <input 
+        type="text" 
+        id="message-input" 
+        placeholder="Type a message..."
+        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+      />
+      <button 
+        id="send-btn" 
+        class="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Load app -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
