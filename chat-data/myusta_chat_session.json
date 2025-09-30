@@ -1,0 +1,19 @@
+{
+  "key": "chat_session",
+  "value": {
+    "userId": "091e4c17-47ab-4150-8b45-ea36dd2c2de9",
+    "userRole": "usta",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjA5MWU0YzE3LTQ3YWItNDE1MC04YjQ1LWVhMzZkZDJjMmRlOSIsInJvbGUiOiJ1c3RhIiwibmFtZSI6IkJhYmFyIEtoYW4iLCJlbWFpbCI6ImJhYmFya2gwMzAyQGdtYWlsLmNvbSIsInBob25lIjoiOTIzMDQ2OTk4NjM0IiwiaWF0IjoxNzU5MDcyODYxLCJleHAiOjE3NTk2Nzc2NjF9.g04d7uKDI8tjQDdT6HiWgFimhLp5iIziMYchou3qUrM",
+    "userDetails": {
+      "id": "091e4c17-47ab-4150-8b45-ea36dd2c2de9",
+      "externalId": "091e4c17-47ab-4150-8b45-ea36dd2c2de9",
+      "name": "Babar Khan",
+      "email": "babarkh0302@gmail.com",
+      "phone": "923046998634",
+      "role": "usta"
+    },
+    "timestamp": 1759190186867
+  },
+  "timestamp": "2025-09-29T23:56:26.868Z",
+  "type": "object"
+}

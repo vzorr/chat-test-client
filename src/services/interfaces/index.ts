@@ -214,7 +214,7 @@ export interface IRealtimeService {
 }
 
 // ==========================================
-// Offline Queue Service Interface
+// Offline Queue Service Interface - UPDATED
 // ==========================================
 export interface IOfflineQueueService {
   // Queue management
@@ -231,6 +231,21 @@ export interface IOfflineQueueService {
   // Persistence
   saveQueue(): Promise<void>;
   loadQueue(): Promise<void>;
+  
+  // NEW: Added missing methods
+  setSendFunction(sendFn: (message: Message) => Promise<Message>): void;
+  getQueueStatus(): {
+    count: number;
+    messages: Array<{
+      clientTempId: string;
+      conversationId: string;
+      content: string;
+      timestamp: string;
+      retryCount: number;
+      age: number;
+    }>;
+  };
+  cleanupExpiredMessages(): Promise<void>;
 }
 
 // ==========================================

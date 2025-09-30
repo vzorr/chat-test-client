@@ -39,8 +39,10 @@ import { MemoryCacheService } from '../implementations/MemoryCacheService';
 import { socketService } from '../implementations/SocketService';
 
 export interface ServiceFactoryConfig {
+  
   token?: string;
   userId?: string;
+  platform?: string; // ADDED
   enableLogging?: boolean;
   customImplementations?: {
     messageService?: IMessageService;
