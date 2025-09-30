@@ -1,4 +1,4 @@
-// AuthService.ts - Simplified with only essential auth functionality
+// AuthService.ts - Updated with correct login endpoint
 import { AppConfig } from '../config/AppConfig';
 import { logger } from '../utils/Logger';
 import { BaseApiClient } from './api/base/BaseApiClient';
@@ -32,28 +32,50 @@ export class AuthService {
   }
 
   /**
-   * Login user with email and password
+   * Login user with email/phone and password
+   * @param emailOrPhone - Email or phone number
+   * @param password - User password
+   * @param role - User role ('usta' or 'customer')
    */
-  static async login(email: string, password: string) {
+  static async login(
+    emailOrPhone: string, 
+    password: string, 
+    role: 'usta' | 'customer' = 'usta'
+  ) {
     try {
-      logger.info('Attempting login for user:', email);
+      logger.info('Attempting login', { emailOrPhone, role });
 
       // Validate inputs
-      if (!email || !password) {
-        throw new Error('Email and password are required');
+      if (!emailOrPhone || !password) {
+        throw new Error('Email/phone and password are required');
+      }
+
+      if (!['usta', 'customer'].includes(role)) {
+        throw new Error('Role must be either "usta" or "customer"');
       }
 
       const apiClient = this.getApiClient();
+      
+      // Updated payload to match new API format
       const response = await apiClient.post<any>('/auth/login', {
-        email,
-        password
+        emailOrPhone,
+        password,
+        role
       });
 
-      if (!response?.success || !response?.data?.token) {
+      // Handle response - server returns data in 'result' field
+      if (!response?.success) {
         throw new Error(response?.message || 'Login failed');
       }
 
-      const { token, refreshToken, user } = response.data;
+      // Server response structure: { success, code, message, result: { userId, token, ... } }
+      const responseData = response.result || response.data || response;
+      const { token, refreshToken, userId, firstName, lastName, email } = responseData;
+
+      if (!token) {
+        console.error('Login response:', JSON.stringify(response, null, 2));
+        throw new Error('No token received from server');
+      }
 
       // TODO: Store tokens using injected storage service
       // await this.storageService.set('userToken', token);
@@ -63,21 +85,57 @@ export class AuthService {
       // Update API client with new token
       apiClient.setToken(token);
 
-      logger.info('Login successful');
+      logger.info('Login successful', { 
+        userId: user?.id,
+        role: user?.role || role
+      });
+
       return {
         success: true,
         token,
-        user
+        refreshToken,
+        user: {
+          id: user?.id,
+          name: user?.name,
+          email: user?.email,
+          phone: user?.phone,
+          role: user?.role || role,
+          ...user
+        }
       };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       logger.error('Login failed:', error);
+      
       return {
         success: false,
-        error: errorMessage
+        error: errorMessage,
+        details: error
       };
     }
+  }
+
+  /**
+   * Login with email
+   */
+  static async loginWithEmail(
+    email: string,
+    password: string,
+    role: 'usta' | 'customer' = 'usta'
+  ) {
+    return this.login(email, password, role);
+  }
+
+  /**
+   * Login with phone
+   */
+  static async loginWithPhone(
+    phone: string,
+    password: string,
+    role: 'usta' | 'customer' = 'usta'
+  ) {
+    return this.login(phone, password, role);
   }
 
   /**
@@ -290,6 +348,7 @@ export class AuthService {
       return {
         id: payload.id,
         email: payload.email,
+        phone: payload.phone,
         role: payload.role,
         name: payload.name,
         exp: payload.exp,
@@ -299,6 +358,44 @@ export class AuthService {
       logger.error('Failed to parse user info from token:', error);
       return null;
     }
+  }
+
+  /**
+   * Validate login credentials format
+   */
+  static validateCredentials(emailOrPhone: string, password: string): {
+    isValid: boolean;
+    errors: string[];
+  } {
+    const errors: string[] = [];
+
+    // Validate email or phone
+    if (!emailOrPhone || !emailOrPhone.trim()) {
+      errors.push('Email or phone is required');
+    } else {
+      const trimmed = emailOrPhone.trim();
+      
+      // Check if it's an email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      // Check if it's a phone (basic check)
+      const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+      
+      if (!emailRegex.test(trimmed) && !phoneRegex.test(trimmed)) {
+        errors.push('Invalid email or phone format');
+      }
+    }
+
+    // Validate password
+    if (!password) {
+      errors.push('Password is required');
+    } else if (password.length < 6) {
+      errors.push('Password must be at least 6 characters');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 
   /**

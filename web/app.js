@@ -1,5 +1,6 @@
-// web/app.js - Main application logic for web chat client
+// web/app.js - Fixed login implementation
 import { chatService } from '../src/services/ChatService.ts';
+import { AuthService } from '../src/services/AuthService.ts';
 import { ConnectionState, MessageStatus } from '../src/types/chat.ts';
 
 // Predefined user profiles for testing
@@ -8,9 +9,9 @@ const USER_PROFILES = [
     id: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
     name: 'Babar Khan',
     role: 'usta',
-    email: 'babar@myusta.al',
-    phone: '+355123456789',
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    email: 'babarkh0302@gmail.com',
+    phone: '+923046998634',
+    password: 'Password123@', // For login
     receiverId: 'customer-001',
     receiverName: 'Customer'
   },
@@ -20,7 +21,7 @@ const USER_PROFILES = [
     role: 'customer',
     email: 'john@example.com',
     phone: '+355987654321',
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    password: 'Password123@', // For login
     receiverId: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
     receiverName: 'Babar Khan'
   }
@@ -79,9 +80,51 @@ class ChatApp {
       const selectedIndex = document.querySelector('input[name="user"]:checked')?.value;
       if (selectedIndex !== undefined) {
         this.currentUser = USER_PROFILES[parseInt(selectedIndex)];
-        await this.connectToChat();
+        await this.performLogin();
       }
     });
+  }
+
+  async performLogin() {
+    try {
+      console.log('🔐 Attempting login...');
+      
+      // Show loading state
+      const connectBtn = document.getElementById('connect-btn');
+      const originalText = connectBtn.textContent;
+      connectBtn.textContent = 'Logging in...';
+      connectBtn.disabled = true;
+
+      // FIXED: Use the correct method name 'login' instead of 'loginWithRole'
+      const loginResult = await AuthService.login(
+        this.currentUser.email,
+        this.currentUser.password,
+        this.currentUser.role
+      );
+
+      if (!loginResult.success) {
+        throw new Error(loginResult.error || 'Login failed');
+      }
+
+      console.log('✅ Login successful!', loginResult);
+
+      // Store the token
+      this.currentUser.token = loginResult.token;
+      this.currentUser.userData = loginResult.user;
+
+      // Connect to chat
+      await this.connectToChat();
+
+    } catch (error) {
+      console.error('❌ Login failed:', error);
+      
+      // Reset button
+      const connectBtn = document.getElementById('connect-btn');
+      connectBtn.textContent = 'Connect to Chat';
+      connectBtn.disabled = false;
+      
+      alert('Login failed: ' + error.message + '\n\nPlease check your credentials.');
+    }
   }
 
   async connectToChat() {
@@ -96,15 +139,17 @@ class ChatApp {
       document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
       this.updateConnectionStatus('connecting', 'Connecting...');
 
-      // Initialize chat service
+      console.log('🚀 Initializing chat with token:', this.currentUser.token.substring(0, 20) + '...');
+
+      // Initialize chat service with the login token
       await chatService.initialize(
-        this.currentUser.id,
+        this.currentUser.userData.id || this.currentUser.id,
         this.currentUser.role,
         this.currentUser.token,
         undefined,
         {
-          id: this.currentUser.id,
-          externalId: this.currentUser.id,
+          id: this.currentUser.userData.id || this.currentUser.id,
+          externalId: this.currentUser.userData.id || this.currentUser.id,
           name: this.currentUser.name,
           email: this.currentUser.email,
           phone: this.currentUser.phone,
@@ -128,6 +173,14 @@ class ChatApp {
       console.error('❌ Connection failed:', error);
       this.updateConnectionStatus('error', 'Connection Error');
       alert('Failed to connect: ' + error.message);
+      
+      // Go back to login screen
+      document.getElementById('chat-interface').classList.add('hidden');
+      document.getElementById('role-selection').classList.remove('hidden');
+      
+      const connectBtn = document.getElementById('connect-btn');
+      connectBtn.textContent = 'Connect to Chat';
+      connectBtn.disabled = false;
     }
   }
 
@@ -282,7 +335,7 @@ class ChatApp {
 
   renderMessage(message, animate = true) {
     const container = document.getElementById('messages-container');
-    const isMine = message.senderId === this.currentUser.id;
+    const isMine = message.senderId === this.currentUser.userData?.id || message.senderId === this.currentUser.id;
     const statusIcon = this.getStatusIcon(message.status);
 
     const messageDiv = document.createElement('div');
@@ -368,8 +421,8 @@ class ChatApp {
   }
 
   showError(message) {
-    // Simple alert for now - could be improved with toast notifications
     console.error(message);
+    // Could add a toast notification here
   }
 
   escapeHtml(text) {
