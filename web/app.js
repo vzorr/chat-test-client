@@ -1,7 +1,18 @@
 // web/app.js - Enhanced with Online Users Panel
-import { chatService } from '../src/services/ChatService.ts';
+import { chatService } from '../src/services/chatService.ts';  // ✅ Correct - lowercase c
+
+console.log('📦 App.js loaded');
+console.log('📦 Modules:', { 
+  chatService: typeof chatService, 
+  AuthService: typeof AuthService,
+  ConnectionState: typeof ConnectionState,
+  MessageStatus: typeof MessageStatus
+});
+
+
 import { AuthService } from '../src/services/AuthService.ts';
 import { ConnectionState, MessageStatus } from '../src/types/chat.ts';
+
 
 const USER_PROFILES = [
   {
@@ -214,7 +225,7 @@ class ChatApp {
   // ==========================================
 
 
-  setupOnlineUsersPanel() {
+setupOnlineUsersPanel() {
     // Show loading initially
     this.renderOnlineUsersLoading();
     
@@ -253,6 +264,7 @@ class ChatApp {
     }, 10000);
 
     // Auto-refresh every 30 seconds as fallback
+
     setInterval(() => {
       if (chatService.isConnected()) {
         chatService.getAllOnlineUsers();
@@ -260,7 +272,8 @@ class ChatApp {
     }, 30000);
   }
 
-  
+
+
   renderOnlineUsers() {
     const container = document.getElementById('online-users-list');
     const countBadge = document.getElementById('online-count');
