@@ -1,4 +1,4 @@
-// web/app.js - Final Working Version
+// web/app.js - FIXED VERSION with Better Error Handling
 console.log('========================================');
 console.log('📦 APP.JS LOADING STARTED');
 console.log('========================================');
@@ -79,6 +79,7 @@ class ChatApp {
     this.jobId = `job-${Date.now()}`;
     this.jobTitle = 'Service Request';
     this.searchTerm = '';
+    this.isInitializing = false; // ADD: Track initialization state
     
     console.log('  ✅ State initialized');
     console.log('  ✅ Job ID:', this.jobId);
@@ -174,6 +175,7 @@ class ChatApp {
 
     } catch (error) {
       console.error('❌ [LOGIN] Failed:', error);
+      console.error('Full error:', error.stack);
       
       const connectBtn = document.getElementById('connect-btn');
       connectBtn.textContent = 'Connect to Chat';
@@ -184,9 +186,22 @@ class ChatApp {
   }
 
   async connectToChat() {
+    // PREVENT DOUBLE INITIALIZATION
+    if (this.isInitializing) {
+      console.log('⚠️ [CONNECT] Already initializing, skipping...');
+      return;
+    }
+
+    this.isInitializing = true;
+
     try {
       console.log('\n🔌 [CONNECT] Establishing chat connection...');
+      console.log('  → Current user:', this.currentUser.name);
+      console.log('  → User ID:', this.currentUser.userData.id || this.currentUser.id);
+      console.log('  → Role:', this.currentUser.role);
+      console.log('  → Has token:', !!this.currentUser.token);
       
+      // Update UI
       document.getElementById('role-selection').classList.add('hidden');
       document.getElementById('chat-interface').classList.remove('hidden');
 
@@ -195,24 +210,43 @@ class ChatApp {
       document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
       this.updateConnectionStatus('connecting', 'Connecting...');
 
-      console.log('  → Initializing chatService...');
-      await this.chatService.initialize(
-        this.currentUser.userData.id || this.currentUser.id,
-        this.currentUser.role,
-        this.currentUser.token,
-        undefined,
-        {
-          id: this.currentUser.userData.id || this.currentUser.id,
-          externalId: this.currentUser.userData.id || this.currentUser.id,
-          name: this.currentUser.name,
-          email: this.currentUser.email,
-          phone: this.currentUser.phone,
-          role: this.currentUser.role
-        }
-      );
+      // CRITICAL: Add detailed logging BEFORE chatService.initialize
+      console.log('\n🔍 [CONNECT] About to call chatService.initialize()');
+      console.log('  → chatService exists:', !!this.chatService);
+      console.log('  → chatService.initialize exists:', typeof this.chatService.initialize);
+
+      // WRAP IN TRY-CATCH TO CATCH ANY ERROR
+      try {
+        console.log('  → Calling chatService.initialize...');
+        
+        await this.chatService.initialize(
+          this.currentUser.userData.id || this.currentUser.id,
+          this.currentUser.role,
+          this.currentUser.token,
+          undefined, // No Redux store
+          {
+            id: this.currentUser.userData.id || this.currentUser.id,
+            externalId: this.currentUser.userData.id || this.currentUser.id,
+            name: this.currentUser.name,
+            email: this.currentUser.email,
+            phone: this.currentUser.phone,
+            role: this.currentUser.role
+          }
+        );
+
+        console.log('  ✅ chatService.initialize() completed');
+
+      } catch (initError) {
+        console.error('  ❌ chatService.initialize() threw error:', initError);
+        console.error('  → Error name:', initError.name);
+        console.error('  → Error message:', initError.message);
+        console.error('  → Error stack:', initError.stack);
+        throw initError; // Re-throw to outer catch
+      }
 
       console.log('  ✅ chatService initialized');
 
+      // Continue with setup
       this.setupEventListeners();
       console.log('  ✅ Event listeners attached');
       
@@ -221,34 +255,6 @@ class ChatApp {
       
       await this.setupConversation();
       console.log('  ✅ Conversation setup complete');
-      
-
-      // ============================================
-    // 🔍 CONNECTION VERIFICATION
-    // ============================================
-    console.log('\n🔍 [CONNECTION CHECK] Verifying socket connection...');
-    
-    // Check 1: Is chatService connected?
-    const isConnected = this.chatService.isConnected();
-    console.log('  → chatService.isConnected():', isConnected);
-    
-    // Check 2: What's the connection state?
-    const state = this.chatService.getConnectionState();
-    console.log('  → Connection state:', state);
-    
-    // Check 3: Can we get the socket directly? (if exposed)
-    if (this.chatService.realtimeService) {
-      const socketId = this.chatService.realtimeService.getSocketId?.();
-      console.log('  → Socket ID:', socketId || 'Not available');
-    }
-    
-    // Check 4: Test basic communication BEFORE online users
-    console.log('\n🔍 [PING TEST] Testing basic socket communication...');
-    
-    await this.testSocketCommunication();
-    
-    // ============================================
-
       
       this.attachInputEvents();
       console.log('  ✅ Input events attached');
@@ -261,48 +267,25 @@ class ChatApp {
 
     } catch (error) {
       console.error('❌ [CONNECT] Connection failed:', error);
-      this.updateConnectionStatus('error', 'Connection Error');
-      alert('Failed to connect: ' + error.message);
+      console.error('Full error stack:', error.stack);
       
+      this.updateConnectionStatus('error', 'Connection Error');
+      
+      // Show detailed error to user
+      const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
+      alert(errorMsg);
+      
+      // Reset UI
       document.getElementById('chat-interface').classList.add('hidden');
       document.getElementById('role-selection').classList.remove('hidden');
       
       const connectBtn = document.getElementById('connect-btn');
       connectBtn.textContent = 'Connect to Chat';
       connectBtn.disabled = false;
+    } finally {
+      this.isInitializing = false;
     }
   }
-
-  /**
- * Test if socket can send/receive at all
- */
-async testSocketCommunication() {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      console.log('  ❌ Ping timeout - socket not responding');
-      reject(new Error('Socket ping timeout'));
-    }, 5000);
-    
-    // Try to test with a simple event
-    const testEvent = 'ping_test_' + Date.now();
-    
-    // Set up one-time listener
-    const handler = (data) => {
-      clearTimeout(timeout);
-      console.log('  ✅ Socket responded to test:', data);
-      resolve(data);
-    };
-    
-    // Note: This requires server to echo back any 'test' event
-    // If your server doesn't have this, we'll use online_users as the test
-    
-    // Since we don't have a test endpoint, let's just verify we're connected
-    // and can emit (the online_users request will be our real test)
-    clearTimeout(timeout);
-    console.log('  ℹ️  Socket connection verified, ready for requests');
-    resolve(true);
-  });
-}
 
   setupEventListeners() {
     this.chatService.onConnectionStateChange((state) => {
@@ -339,90 +322,80 @@ async testSocketCommunication() {
     });
   }
 
-
-
-  // Replace setupOnlineUsersPanel in app.js
-
-setupOnlineUsersPanel() {
-  console.log('\n📋 [ONLINE USERS] Setting up panel...');
-  this.renderOnlineUsersLoading();
-  
-  let initialDataReceived = false;
-  let requestSent = false;
-  
-  // Step 1: Set up listener FIRST
-  console.log('  → Setting up onOnlineUsersChange listener');
-  this.chatService.onOnlineUsersChange((users) => {
-    console.log('  ✅ [ONLINE USERS] Received update:', users.length, 'users');
-    initialDataReceived = true;
-    this.onlineUsers = users;
-    this.renderOnlineUsers();
-  });
-
-  // Step 2: Verify connection before requesting
-  const requestUsers = () => {
-    const isConnected = this.chatService.isConnected();
-    const state = this.chatService.getConnectionState();
+  setupOnlineUsersPanel() {
+    console.log('\n📋 [ONLINE USERS] Setting up panel...');
+    this.renderOnlineUsersLoading();
     
-    console.log('  → [ONLINE USERS] Connection check:', {
-      isConnected,
-      state,
-      requestSent
-    });
+    let initialDataReceived = false;
+    let requestSent = false;
     
-    if (!isConnected) {
-      console.log('  ⏳ [ONLINE USERS] Not connected, waiting...');
-      setTimeout(requestUsers, 1000);
-      return;
-    }
-    
-    if (requestSent) {
-      console.log('  ⏭️  [ONLINE USERS] Request already sent, waiting for response...');
-      return;
-    }
-    
-    // Step 3: Send the request
-    console.log('  📤 [ONLINE USERS] Sending request...');
-    requestSent = true;
-    
-    try {
-      this.chatService.getAllOnlineUsers();
-      console.log('  ✅ [ONLINE USERS] Request sent successfully');
-    } catch (error) {
-      console.error('  ❌ [ONLINE USERS] Failed to send request:', error);
-      requestSent = false; // Allow retry
-    }
-  };
-
-  // Step 4: Wait 2 seconds after connection, then request
-  setTimeout(() => {
-    console.log('\n📡 [ONLINE USERS] Starting request sequence...');
-    requestUsers();
-  }, 2000);
-
-  // Step 5: Timeout warning after 10 seconds
-  setTimeout(() => {
-    if (!initialDataReceived) {
-      console.warn('⚠️  [ONLINE USERS] No response after 10s');
-      console.warn('    Check:');
-      console.warn('    1. Server logs for "get_all_online_users" handler');
-      console.warn('    2. Socket connection is still active');
-      console.warn('    3. Token is valid');
-      console.warn('    Showing empty state...');
-      
-      this.onlineUsers = [];
+    // Step 1: Set up listener FIRST
+    console.log('  → Setting up onOnlineUsersChange listener');
+    this.chatService.onOnlineUsersChange((users) => {
+      console.log('  ✅ [ONLINE USERS] Received update:', users.length, 'users');
+      initialDataReceived = true;
+      this.onlineUsers = users;
       this.renderOnlineUsers();
-    }
-  }, 12000); // 2s delay + 10s timeout
+    });
 
-  // Step 6: Periodic refresh (only if we got initial data)
-  setInterval(() => {
-    if (initialDataReceived && this.chatService.isConnected()) {
-      console.log('🔄 [ONLINE USERS] Periodic refresh...');
-      this.chatService.getAllOnlineUsers();
-    }
-  }, 30000);
-}
+    // Step 2: Wait for connection, then request
+    const requestUsers = () => {
+      const isConnected = this.chatService.isConnected();
+      const state = this.chatService.getConnectionState();
+      
+      console.log('  → [ONLINE USERS] Connection check:', {
+        isConnected,
+        state,
+        requestSent
+      });
+      
+      if (!isConnected) {
+        console.log('  ⏳ [ONLINE USERS] Not connected, waiting...');
+        setTimeout(requestUsers, 1000);
+        return;
+      }
+      
+      if (requestSent) {
+        console.log('  ⏭️  [ONLINE USERS] Request already sent, waiting for response...');
+        return;
+      }
+      
+      // Send the request
+      console.log('  📤 [ONLINE USERS] Sending request...');
+      requestSent = true;
+      
+      try {
+        this.chatService.getAllOnlineUsers();
+        console.log('  ✅ [ONLINE USERS] Request sent successfully');
+      } catch (error) {
+        console.error('  ❌ [ONLINE USERS] Failed to send request:', error);
+        requestSent = false; // Allow retry
+      }
+    };
+
+    // Wait 2 seconds after connection, then request
+    setTimeout(() => {
+      console.log('\n📡 [ONLINE USERS] Starting request sequence...');
+      requestUsers();
+    }, 2000);
+
+    // Timeout warning after 10 seconds
+    setTimeout(() => {
+      if (!initialDataReceived) {
+        console.warn('⚠️  [ONLINE USERS] No response after 10s');
+        this.onlineUsers = [];
+        this.renderOnlineUsers();
+      }
+    }, 12000);
+
+    // Periodic refresh
+    setInterval(() => {
+      if (initialDataReceived && this.chatService.isConnected()) {
+        console.log('🔄 [ONLINE USERS] Periodic refresh...');
+        this.chatService.getAllOnlineUsers();
+      }
+    }, 30000);
+  }
 
   renderOnlineUsersLoading() {
     const container = document.getElementById('online-users-list');
@@ -700,6 +673,7 @@ async function startApp() {
     
   } catch (error) {
     console.error('❌ Fatal error:', error);
+    console.error('Error stack:', error.stack);
     alert('Failed to start: ' + error.message);
   }
 }
