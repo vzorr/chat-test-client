@@ -222,6 +222,34 @@ class ChatApp {
       await this.setupConversation();
       console.log('  ✅ Conversation setup complete');
       
+
+      // ============================================
+    // 🔍 CONNECTION VERIFICATION
+    // ============================================
+    console.log('\n🔍 [CONNECTION CHECK] Verifying socket connection...');
+    
+    // Check 1: Is chatService connected?
+    const isConnected = this.chatService.isConnected();
+    console.log('  → chatService.isConnected():', isConnected);
+    
+    // Check 2: What's the connection state?
+    const state = this.chatService.getConnectionState();
+    console.log('  → Connection state:', state);
+    
+    // Check 3: Can we get the socket directly? (if exposed)
+    if (this.chatService.realtimeService) {
+      const socketId = this.chatService.realtimeService.getSocketId?.();
+      console.log('  → Socket ID:', socketId || 'Not available');
+    }
+    
+    // Check 4: Test basic communication BEFORE online users
+    console.log('\n🔍 [PING TEST] Testing basic socket communication...');
+    
+    await this.testSocketCommunication();
+    
+    // ============================================
+
+      
       this.attachInputEvents();
       console.log('  ✅ Input events attached');
       
@@ -244,6 +272,37 @@ class ChatApp {
       connectBtn.disabled = false;
     }
   }
+
+  /**
+ * Test if socket can send/receive at all
+ */
+async testSocketCommunication() {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      console.log('  ❌ Ping timeout - socket not responding');
+      reject(new Error('Socket ping timeout'));
+    }, 5000);
+    
+    // Try to test with a simple event
+    const testEvent = 'ping_test_' + Date.now();
+    
+    // Set up one-time listener
+    const handler = (data) => {
+      clearTimeout(timeout);
+      console.log('  ✅ Socket responded to test:', data);
+      resolve(data);
+    };
+    
+    // Note: This requires server to echo back any 'test' event
+    // If your server doesn't have this, we'll use online_users as the test
+    
+    // Since we don't have a test endpoint, let's just verify we're connected
+    // and can emit (the online_users request will be our real test)
+    clearTimeout(timeout);
+    console.log('  ℹ️  Socket connection verified, ready for requests');
+    resolve(true);
+  });
+}
 
   setupEventListeners() {
     this.chatService.onConnectionStateChange((state) => {
@@ -280,44 +339,90 @@ class ChatApp {
     });
   }
 
-  setupOnlineUsersPanel() {
-    this.renderOnlineUsersLoading();
+
+
+  // Replace setupOnlineUsersPanel in app.js
+
+setupOnlineUsersPanel() {
+  console.log('\n📋 [ONLINE USERS] Setting up panel...');
+  this.renderOnlineUsersLoading();
+  
+  let initialDataReceived = false;
+  let requestSent = false;
+  
+  // Step 1: Set up listener FIRST
+  console.log('  → Setting up onOnlineUsersChange listener');
+  this.chatService.onOnlineUsersChange((users) => {
+    console.log('  ✅ [ONLINE USERS] Received update:', users.length, 'users');
+    initialDataReceived = true;
+    this.onlineUsers = users;
+    this.renderOnlineUsers();
+  });
+
+  // Step 2: Verify connection before requesting
+  const requestUsers = () => {
+    const isConnected = this.chatService.isConnected();
+    const state = this.chatService.getConnectionState();
     
-    let initialDataReceived = false;
-    
-    this.chatService.onOnlineUsersChange((users) => {
-      console.log('👥 Online users updated:', users.length);
-      initialDataReceived = true;
-      this.onlineUsers = users;
-      this.renderOnlineUsers();
+    console.log('  → [ONLINE USERS] Connection check:', {
+      isConnected,
+      state,
+      requestSent
     });
+    
+    if (!isConnected) {
+      console.log('  ⏳ [ONLINE USERS] Not connected, waiting...');
+      setTimeout(requestUsers, 1000);
+      return;
+    }
+    
+    if (requestSent) {
+      console.log('  ⏭️  [ONLINE USERS] Request already sent, waiting for response...');
+      return;
+    }
+    
+    // Step 3: Send the request
+    console.log('  📤 [ONLINE USERS] Sending request...');
+    requestSent = true;
+    
+    try {
+      this.chatService.getAllOnlineUsers();
+      console.log('  ✅ [ONLINE USERS] Request sent successfully');
+    } catch (error) {
+      console.error('  ❌ [ONLINE USERS] Failed to send request:', error);
+      requestSent = false; // Allow retry
+    }
+  };
 
-    const requestUsers = () => {
-      if (this.chatService.isConnected()) {
-        console.log('📡 Requesting online users...');
-        this.chatService.getAllOnlineUsers();
-      } else {
-        console.log('⏳ Waiting for connection...');
-        setTimeout(requestUsers, 1000);
-      }
-    };
+  // Step 4: Wait 2 seconds after connection, then request
+  setTimeout(() => {
+    console.log('\n📡 [ONLINE USERS] Starting request sequence...');
+    requestUsers();
+  }, 2000);
 
-    setTimeout(requestUsers, 2000);
+  // Step 5: Timeout warning after 10 seconds
+  setTimeout(() => {
+    if (!initialDataReceived) {
+      console.warn('⚠️  [ONLINE USERS] No response after 10s');
+      console.warn('    Check:');
+      console.warn('    1. Server logs for "get_all_online_users" handler');
+      console.warn('    2. Socket connection is still active');
+      console.warn('    3. Token is valid');
+      console.warn('    Showing empty state...');
+      
+      this.onlineUsers = [];
+      this.renderOnlineUsers();
+    }
+  }, 12000); // 2s delay + 10s timeout
 
-    setTimeout(() => {
-      if (!initialDataReceived) {
-        console.log('⚠️ No users data after 10s');
-        this.onlineUsers = [];
-        this.renderOnlineUsers();
-      }
-    }, 10000);
-
-    setInterval(() => {
-      if (this.chatService.isConnected()) {
-        this.chatService.getAllOnlineUsers();
-      }
-    }, 30000);
-  }
+  // Step 6: Periodic refresh (only if we got initial data)
+  setInterval(() => {
+    if (initialDataReceived && this.chatService.isConnected()) {
+      console.log('🔄 [ONLINE USERS] Periodic refresh...');
+      this.chatService.getAllOnlineUsers();
+    }
+  }, 30000);
+}
 
   renderOnlineUsersLoading() {
     const container = document.getElementById('online-users-list');

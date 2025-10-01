@@ -70,15 +70,36 @@ class SocketService implements IRealtimeService {
   /**
    * Request all online users from server
    */
+
+  /**
+ * Request all online users from server
+ * NOW INCLUDES TOKEN for authentication
+ */
   getAllOnlineUsers(): void {
     if (!this.socket?.connected) {
       AppLogger.warn('Cannot get online users: Socket not connected');
       return;
     }
     
-    AppLogger.debug('Requesting all online users');
-    this.socket.emit('get_all_online_users');
+    // Get token from socket auth (it was passed during connection)
+    const auth = this.socket.auth as { token?: string; userId?: string };
+    
+    AppLogger.info('📤 Requesting online users from server', {
+      userId: this.userId,
+      hasToken: !!auth?.token,
+      socketId: this.socket.id
+    });
+    
+    // Include token in the request
+    this.socket.emit('get_all_online_users', { 
+      userId: this.userId,
+      token: auth?.token, // ✅ Now includes token
+      timestamp: Date.now()
+    });
+    
+    AppLogger.debug('Request sent, waiting for response...');
   }
+
 
   /**
    * Get online users from local cache (synchronous)
@@ -487,67 +508,94 @@ class SocketService implements IRealtimeService {
     });
   }
 
-  private setupOnlineUsersHandlers(): void {
-    if (!this.socket) return;
+// src/services/implementations/SocketService.ts
+// Replace setupOnlineUsersHandlers method
 
-    // Initial data with online users list
-    this.socket.on('initial_data', (data: any) => {
-      AppLogger.info('Initial data received', { 
-        hasOnlineUsers: !!data.onlineUsers,
-        count: data.onlineUsers?.length || 0
+private setupOnlineUsersHandlers(): void {
+  if (!this.socket) return;
+
+  AppLogger.info('Setting up online users event handlers');
+
+  // Handler for successful response
+  const handleOnlineUsersResponse = (data: any) => {
+    AppLogger.info('📥 Received online users response', {
+      hasUsers: !!data.users,
+      count: data.count || data.users?.length || 0,
+      dataKeys: Object.keys(data)
+    });
+    
+    this.onlineUsers.clear();
+    const usersList = data.users || [];
+    
+    if (Array.isArray(usersList)) {
+      usersList.forEach((user: OnlineUser) => {
+        this.onlineUsers.set(user.id, user);
       });
-      
-      if (data.onlineUsers && Array.isArray(data.onlineUsers)) {
-        this.onlineUsers.clear();
-        data.onlineUsers.forEach((user: OnlineUser) => {
-          this.onlineUsers.set(user.id, user);
-        });
-        AppLogger.info(`Loaded ${this.onlineUsers.size} online users from initial data`);
-        this.notifyOnlineUsersUpdate();
-      }
-    });
+      AppLogger.info(`✅ Loaded ${this.onlineUsers.size} online users`);
+    } else {
+      AppLogger.warn('⚠️  Users list is not an array:', typeof usersList);
+    }
+    
+    this.notifyOnlineUsersUpdate();
+  };
 
-    // User comes online
-    this.socket.on('user_online', (data: any) => {
-      const user: OnlineUser = {
-        id: data.id,
-        name: data.name,
-        avatar: data.avatar,
-        isOnline: true,
-        lastSeen: data.lastSeen,
-        role: data.role,
-        status: data.status
-      };
-      
-      this.onlineUsers.set(user.id, user);
-      AppLogger.debug(`User ${user.name} (${user.id}) came online`);
-      this.notifyOnlineUsersUpdate();
-    });
+  // Listen for the response
+  this.socket.on('all_online_users', handleOnlineUsersResponse);
+  AppLogger.debug('Listener registered for: all_online_users');
 
-    // User goes offline
-    this.socket.on('user_offline', (data: any) => {
-      const userId = data.id;
-      const userName = data.name || this.onlineUsers.get(userId)?.name || 'Unknown';
-      
-      this.onlineUsers.delete(userId);
-      AppLogger.debug(`User ${userName} (${userId}) went offline`);
-      this.notifyOnlineUsersUpdate();
-    });
+  // Listen for errors
+  this.socket.on('error', (error: any) => {
+    if (error.code === 'GET_ALL_ONLINE_USERS_FAILED') {
+      AppLogger.error('❌ Server error getting online users:', error);
+    }
+  });
+  AppLogger.debug('Error listener registered');
 
-    // Response to get_all_online_users
-    this.socket.on('all_online_users', (data: any) => {
-      AppLogger.info(`Received all_online_users response: ${data.count} users`);
-      
+  // Initial data (might contain online users on connection)
+  this.socket.on('initial_data', (data: any) => {
+    AppLogger.info('📦 Initial data received', { 
+      hasOnlineUsers: !!data.onlineUsers,
+      count: data.onlineUsers?.length || 0
+    });
+    
+    if (data.onlineUsers && Array.isArray(data.onlineUsers)) {
       this.onlineUsers.clear();
-      if (data.users && Array.isArray(data.users)) {
-        data.users.forEach((user: OnlineUser) => {
-          this.onlineUsers.set(user.id, user);
-        });
-      }
+      data.onlineUsers.forEach((user: OnlineUser) => {
+        this.onlineUsers.set(user.id, user);
+      });
+      AppLogger.info(`Loaded ${this.onlineUsers.size} online users from initial data`);
       this.notifyOnlineUsersUpdate();
-    });
-  }
+    }
+  });
+  AppLogger.debug('Listener registered for: initial_data');
 
+  // User status changes
+  this.socket.on('user_online', (data: any) => {
+    const user: OnlineUser = {
+      id: data.id,
+      name: data.name,
+      avatar: data.avatar,
+      isOnline: true,
+      lastSeen: data.lastSeen,
+      role: data.role,
+      status: data.status
+    };
+    
+    this.onlineUsers.set(user.id, user);
+    AppLogger.debug(`User ${user.name} came online`);
+    this.notifyOnlineUsersUpdate();
+  });
+
+  this.socket.on('user_offline', (data: any) => {
+    const userId = data.id;
+    this.onlineUsers.delete(userId);
+    AppLogger.debug(`User ${userId} went offline`);
+    this.notifyOnlineUsersUpdate();
+  });
+  
+  
+  AppLogger.info('✅ Online users handlers setup complete');
+}
   // ==========================================
   // PRIVATE HELPER METHODS
   // ==========================================
