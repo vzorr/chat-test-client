@@ -1,18 +1,73 @@
-// web/app.js - Enhanced with Online Users Panel
-import { chatService } from '../src/services/chatService.ts';  // ✅ Correct - lowercase c
+// web/app.js - Enhanced with Comprehensive Debug Logging
+console.log('========================================');
+console.log('📦 APP.JS LOADING STARTED');
+console.log('========================================');
+console.log('Current URL:', window.location.href);
+console.log('Document ready state:', document.readyState);
+console.log('Import meta:', import.meta);
 
-console.log('📦 App.js loaded');
-console.log('📦 Modules:', { 
-  chatService: typeof chatService, 
-  AuthService: typeof AuthService,
-  ConnectionState: typeof ConnectionState,
-  MessageStatus: typeof MessageStatus
-});
+// ==========================================
+// DYNAMIC IMPORTS WITH DETAILED LOGGING
+// ==========================================
 
+async function loadModules() {
+  console.log('\n🔄 [STEP 1] Starting module imports...');
+  
+  try {
+    // Import chatService
+    console.log('  → Importing chatService...');
+    const chatServiceModule = await import('../src/services/chatService');
+    console.log('  ✅ chatService module loaded:', Object.keys(chatServiceModule));
+    const { chatService } = chatServiceModule;
+    console.log('  ✅ chatService instance:', chatService ? 'EXISTS' : 'MISSING');
+    
+    // Import AuthService
+    console.log('  → Importing AuthService...');
+    const authModule = await import('../src/services/AuthService');
+    console.log('  ✅ AuthService module loaded:', Object.keys(authModule));
+    const { AuthService } = authModule;
+    console.log('  ✅ AuthService class:', AuthService ? 'EXISTS' : 'MISSING');
+    
+    // Import types
+    console.log('  → Importing chat types...');
+    const typesModule = await import('../src/types/chat');
+    console.log('  ✅ Types module loaded, keys:', Object.keys(typesModule).slice(0, 10));
+    const { ConnectionState, MessageStatus } = typesModule;
+    console.log('  ✅ ConnectionState:', ConnectionState ? 'EXISTS' : 'MISSING');
+    console.log('  ✅ MessageStatus:', MessageStatus ? 'EXISTS' : 'MISSING');
+    
+    console.log('\n✅ [STEP 1] All modules loaded successfully!\n');
+    
+    return { chatService, AuthService, ConnectionState, MessageStatus };
+    
+  } catch (error) {
+    console.error('\n❌ [STEP 1] Module import failed!');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Show error in UI
+    document.body.innerHTML = `
+      <div style="padding: 40px; background: #fee2e2; color: #991b1b; font-family: monospace; max-width: 800px; margin: 50px auto; border-radius: 8px;">
+        <h2>❌ Failed to Load Chat Application</h2>
+        <p><strong>Error:</strong> ${error.message}</p>
+        <details style="margin-top: 20px;">
+          <summary style="cursor: pointer;">Show Details</summary>
+          <pre style="margin-top: 10px; padding: 10px; background: white; overflow: auto;">${error.stack}</pre>
+        </details>
+        <p style="margin-top: 20px; font-size: 12px;">
+          Check the browser console (F12) for more information.
+        </p>
+      </div>
+    `;
+    
+    throw error;
+  }
+}
 
-import { AuthService } from '../src/services/AuthService.ts';
-import { ConnectionState, MessageStatus } from '../src/types/chat.ts';
-
+// ==========================================
+// USER PROFILES
+// ==========================================
 
 const USER_PROFILES = [
   {
@@ -37,8 +92,23 @@ const USER_PROFILES = [
   }
 ];
 
+// ==========================================
+// CHAT APP CLASS
+// ==========================================
+
 class ChatApp {
-  constructor() {
+  constructor(modules) {
+    console.log('\n🔄 [STEP 2] Initializing ChatApp class...');
+    
+    // Store modules
+    this.chatService = modules.chatService;
+    this.AuthService = modules.AuthService;
+    this.ConnectionState = modules.ConnectionState;
+    this.MessageStatus = modules.MessageStatus;
+    
+    console.log('  ✅ Modules assigned to ChatApp');
+    
+    // Initialize state
     this.currentUser = null;
     this.conversationId = null;
     this.messageHistory = [];
@@ -47,16 +117,38 @@ class ChatApp {
     this.jobTitle = 'Service Request';
     this.searchTerm = '';
     
+    console.log('  ✅ State initialized');
+    console.log('  ✅ Job ID:', this.jobId);
+    
+    // Start initialization
     this.init();
   }
 
   init() {
-    this.renderUserSelection();
-    this.attachRoleSelectionEvents();
+    console.log('\n🔄 [STEP 3] Starting UI initialization...');
+    try {
+      this.renderUserSelection();
+      console.log('  ✅ User selection rendered');
+      
+      this.attachRoleSelectionEvents();
+      console.log('  ✅ Events attached');
+      
+      console.log('\n✅ [STEP 3] ChatApp initialization complete!\n');
+      console.log('========================================');
+      console.log('🎉 APPLICATION READY - Select a user to continue');
+      console.log('========================================\n');
+    } catch (error) {
+      console.error('❌ [STEP 3] Initialization failed:', error);
+      throw error;
+    }
   }
 
   renderUserSelection() {
     const userList = document.getElementById('user-list');
+    if (!userList) {
+      throw new Error('Element #user-list not found in DOM');
+    }
+    
     userList.innerHTML = USER_PROFILES.map((user, index) => `
       <li>
         <label class="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
@@ -82,9 +174,14 @@ class ChatApp {
     const connectBtn = document.getElementById('connect-btn');
     const radioButtons = document.querySelectorAll('input[name="user"]');
 
+    if (!connectBtn) {
+      throw new Error('Element #connect-btn not found in DOM');
+    }
+
     radioButtons.forEach(radio => {
       radio.addEventListener('change', () => {
         connectBtn.disabled = false;
+        console.log('👤 User selected:', USER_PROFILES[parseInt(radio.value)].name);
       });
     });
 
@@ -92,6 +189,7 @@ class ChatApp {
       const selectedIndex = document.querySelector('input[name="user"]:checked')?.value;
       if (selectedIndex !== undefined) {
         this.currentUser = USER_PROFILES[parseInt(selectedIndex)];
+        console.log('\n🔐 Login initiated for:', this.currentUser.name);
         await this.performLogin();
       }
     });
@@ -99,14 +197,15 @@ class ChatApp {
 
   async performLogin() {
     try {
-      console.log('🔐 Attempting login...');
+      console.log('🔐 [LOGIN] Starting authentication...');
       
       const connectBtn = document.getElementById('connect-btn');
       const originalText = connectBtn.textContent;
       connectBtn.textContent = 'Logging in...';
       connectBtn.disabled = true;
 
-      const loginResult = await AuthService.login(
+      console.log('  → Calling AuthService.login()');
+      const loginResult = await this.AuthService.login(
         this.currentUser.email,
         this.currentUser.password,
         this.currentUser.role
@@ -116,7 +215,9 @@ class ChatApp {
         throw new Error(loginResult.error || 'Login failed');
       }
 
-      console.log('✅ Login successful!', loginResult);
+      console.log('  ✅ Login successful!');
+      console.log('  → Token:', loginResult.token.substring(0, 20) + '...');
+      console.log('  → User data:', loginResult.user);
 
       this.currentUser.token = loginResult.token;
       this.currentUser.userData = loginResult.user;
@@ -124,7 +225,7 @@ class ChatApp {
       await this.connectToChat();
 
     } catch (error) {
-      console.error('❌ Login failed:', error);
+      console.error('❌ [LOGIN] Failed:', error);
       
       const connectBtn = document.getElementById('connect-btn');
       connectBtn.textContent = 'Connect to Chat';
@@ -136,6 +237,8 @@ class ChatApp {
 
   async connectToChat() {
     try {
+      console.log('\n🔌 [CONNECT] Establishing chat connection...');
+      
       document.getElementById('role-selection').classList.add('hidden');
       document.getElementById('chat-interface').classList.remove('hidden');
 
@@ -144,9 +247,8 @@ class ChatApp {
       document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
       this.updateConnectionStatus('connecting', 'Connecting...');
 
-      console.log('🚀 Initializing chat with token:', this.currentUser.token.substring(0, 20) + '...');
-
-      await chatService.initialize(
+      console.log('  → Initializing chatService...');
+      await this.chatService.initialize(
         this.currentUser.userData.id || this.currentUser.id,
         this.currentUser.role,
         this.currentUser.token,
@@ -161,17 +263,28 @@ class ChatApp {
         }
       );
 
+      console.log('  ✅ chatService initialized');
+
       this.setupEventListeners();
-      this.setupOnlineUsersPanel(); // NEW
+      console.log('  ✅ Event listeners attached');
+      
+      this.setupOnlineUsersPanel();
+      console.log('  ✅ Online users panel setup');
+      
       await this.setupConversation();
+      console.log('  ✅ Conversation setup complete');
+      
       this.attachInputEvents();
-      this.attachOnlineUsersPanelEvents(); // NEW
+      console.log('  ✅ Input events attached');
+      
+      this.attachOnlineUsersPanelEvents();
+      console.log('  ✅ Panel events attached');
 
       this.updateConnectionStatus('connected', 'Connected');
-      console.log('✅ Chat connected successfully');
+      console.log('\n✅ [CONNECT] Chat connected successfully!\n');
 
     } catch (error) {
-      console.error('❌ Connection failed:', error);
+      console.error('❌ [CONNECT] Connection failed:', error);
       this.updateConnectionStatus('error', 'Connection Error');
       alert('Failed to connect: ' + error.message);
       
@@ -185,76 +298,65 @@ class ChatApp {
   }
 
   setupEventListeners() {
-    chatService.onConnectionStateChange((state) => {
+    this.chatService.onConnectionStateChange((state) => {
       const stateMap = {
-        [ConnectionState.CONNECTED]: { status: 'connected', text: 'Connected' },
-        [ConnectionState.CONNECTING]: { status: 'connecting', text: 'Connecting...' },
-        [ConnectionState.RECONNECTING]: { status: 'connecting', text: 'Reconnecting...' },
-        [ConnectionState.DISCONNECTED]: { status: 'disconnected', text: 'Disconnected' },
-        [ConnectionState.ERROR]: { status: 'error', text: 'Error' }
+        [this.ConnectionState.CONNECTED]: { status: 'connected', text: 'Connected' },
+        [this.ConnectionState.CONNECTING]: { status: 'connecting', text: 'Connecting...' },
+        [this.ConnectionState.RECONNECTING]: { status: 'connecting', text: 'Reconnecting...' },
+        [this.ConnectionState.DISCONNECTED]: { status: 'disconnected', text: 'Disconnected' },
+        [this.ConnectionState.ERROR]: { status: 'error', text: 'Error' }
       };
       
-      const { status, text } = stateMap[state] || stateMap[ConnectionState.DISCONNECTED];
+      const { status, text } = stateMap[state] || stateMap[this.ConnectionState.DISCONNECTED];
       this.updateConnectionStatus(status, text);
     });
 
-    chatService.onNewMessage((message) => {
-      console.log('💬 New message:', message);
+    this.chatService.onNewMessage((message) => {
+      console.log('💬 New message:', message.id);
       this.messageHistory.push(message);
       this.renderMessage(message);
     });
 
-    chatService.onMessageSent((data) => {
+    this.chatService.onMessageSent((data) => {
       console.log('✅ Message sent:', data.messageId);
     });
 
-    chatService.onMessageSendError((data) => {
+    this.chatService.onMessageSendError((data) => {
       console.error('❌ Send error:', data.error);
       this.showError('Failed to send message');
     });
 
-    chatService.onTyping((userId, isTyping) => {
+    this.chatService.onTyping((userId, isTyping) => {
       if (userId !== this.currentUser.id) {
         this.showTypingIndicator(isTyping);
       }
     });
   }
 
-  // ==========================================
-  // ONLINE USERS PANEL - NEW
-  // ==========================================
-
-
-setupOnlineUsersPanel() {
-    // Show loading initially
+  setupOnlineUsersPanel() {
     this.renderOnlineUsersLoading();
     
-    // Track if we've received initial data
     let initialDataReceived = false;
     
-    // Subscribe to online users updates
-    chatService.onOnlineUsersChange((users) => {
+    this.chatService.onOnlineUsersChange((users) => {
       console.log('👥 Online users updated:', users.length);
       initialDataReceived = true;
       this.onlineUsers = users;
       this.renderOnlineUsers();
     });
 
-    // Wait for socket connection before requesting users
     const requestUsers = () => {
-      if (chatService.isConnected()) {
+      if (this.chatService.isConnected()) {
         console.log('🔌 Socket connected, requesting online users...');
-        chatService.getAllOnlineUsers();
+        this.chatService.getAllOnlineUsers();
       } else {
         console.log('⏳ Waiting for socket connection...');
-        setTimeout(requestUsers, 1000); // Retry after 1 second
+        setTimeout(requestUsers, 1000);
       }
     };
 
-    // Request initial list after a short delay to ensure connection
     setTimeout(requestUsers, 2000);
 
-    // Timeout fallback: if no data after 10 seconds, show empty state
     setTimeout(() => {
       if (!initialDataReceived) {
         console.log('⚠️ No online users data received, showing empty state');
@@ -263,29 +365,33 @@ setupOnlineUsersPanel() {
       }
     }, 10000);
 
-    // Auto-refresh every 30 seconds as fallback
-
     setInterval(() => {
-      if (chatService.isConnected()) {
-        chatService.getAllOnlineUsers();
+      if (this.chatService.isConnected()) {
+        this.chatService.getAllOnlineUsers();
       }
     }, 30000);
   }
 
-
+  renderOnlineUsersLoading() {
+    const container = document.getElementById('online-users-list');
+    container.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <div class="animate-spin w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-2"></div>
+        <p class="text-sm">Loading users...</p>
+      </div>
+    `;
+  }
 
   renderOnlineUsers() {
     const container = document.getElementById('online-users-list');
     const countBadge = document.getElementById('online-count');
     
-    // Filter by search term
     const filtered = this.searchTerm
       ? this.onlineUsers.filter(user => 
           user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
         )
       : this.onlineUsers;
 
-    // Update count
     countBadge.textContent = this.onlineUsers.length;
 
     if (filtered.length === 0) {
@@ -325,7 +431,6 @@ setupOnlineUsersPanel() {
   }
 
   attachOnlineUsersPanelEvents() {
-    // Toggle panel
     const toggleBtn = document.getElementById('toggle-panel');
     const panelBody = document.getElementById('panel-body');
     
@@ -334,31 +439,24 @@ setupOnlineUsersPanel() {
       toggleBtn.textContent = panelBody.classList.contains('hidden') ? '▼' : '▲';
     });
 
-    // Search users
     const searchInput = document.getElementById('user-search');
     searchInput.addEventListener('input', (e) => {
       this.searchTerm = e.target.value;
       this.renderOnlineUsers();
     });
 
-    // Make this available for onclick handlers
     window.chatApp = this;
   }
 
   async startChatWith(userId, userName) {
     console.log(`💬 Starting chat with ${userName} (${userId})`);
-    // You can implement this to switch conversations
     alert(`Starting chat with ${userName} - Coming soon!`);
   }
-
-  // ==========================================
-  // EXISTING METHODS (unchanged)
-  // ==========================================
 
   async setupConversation() {
     console.log('🔍 Setting up conversation...');
     
-    const conversation = await chatService.findOrCreateJobConversation(
+    const conversation = await this.chatService.findOrCreateJobConversation(
       this.jobId,
       this.currentUser.receiverId
     );
@@ -366,7 +464,7 @@ setupOnlineUsersPanel() {
     this.conversationId = conversation.id;
     console.log('✅ Conversation ready:', this.conversationId);
 
-    const result = await chatService.loadMessages(this.conversationId, {
+    const result = await this.chatService.loadMessages(this.conversationId, {
       page: 1,
       limit: 50
     });
@@ -378,7 +476,7 @@ setupOnlineUsersPanel() {
 
     if (result.messages.length === 0) {
       setTimeout(() => {
-        chatService.sendTextMessage(
+        this.chatService.sendTextMessage(
           this.conversationId,
           `Hello! I'm ${this.currentUser.name}. How can I help you today?`,
           this.currentUser.receiverId
@@ -395,7 +493,7 @@ setupOnlineUsersPanel() {
 
     input.addEventListener('input', () => {
       if (this.conversationId) {
-        chatService.sendTypingIndicator(
+        this.chatService.sendTypingIndicator(
           this.conversationId,
           this.currentUser.receiverId,
           true
@@ -404,7 +502,7 @@ setupOnlineUsersPanel() {
         clearTimeout(typingTimeout);
 
         typingTimeout = setTimeout(() => {
-          chatService.sendTypingIndicator(
+          this.chatService.sendTypingIndicator(
             this.conversationId,
             this.currentUser.receiverId,
             false
@@ -434,13 +532,13 @@ setupOnlineUsersPanel() {
     try {
       input.value = '';
 
-      chatService.sendTypingIndicator(
+      this.chatService.sendTypingIndicator(
         this.conversationId,
         this.currentUser.receiverId,
         false
       );
 
-      await chatService.sendTextMessage(
+      await this.chatService.sendTextMessage(
         this.conversationId,
         text,
         this.currentUser.receiverId
@@ -488,13 +586,13 @@ setupOnlineUsersPanel() {
 
   getStatusIcon(status) {
     const icons = {
-      [MessageStatus.SENDING]: '⏳',
-      [MessageStatus.SENT]: '✓',
-      [MessageStatus.DELIVERED]: '✓✓',
-      [MessageStatus.READ]: '✓✓',
-      [MessageStatus.FAILED]: '❌',
-      [MessageStatus.QUEUED]: '📥',
-      [MessageStatus.EXPIRED]: '⏰'
+      [this.MessageStatus.SENDING]: '⏳',
+      [this.MessageStatus.SENT]: '✓',
+      [this.MessageStatus.DELIVERED]: '✓✓',
+      [this.MessageStatus.READ]: '✓✓',
+      [this.MessageStatus.FAILED]: '❌',
+      [this.MessageStatus.QUEUED]: '📥',
+      [this.MessageStatus.EXPIRED]: '⏰'
     };
     return icons[status] || '';
   }
@@ -549,10 +647,34 @@ setupOnlineUsersPanel() {
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    new ChatApp();
-  });
-} else {
-  new ChatApp();
+// ==========================================
+// MAIN INITIALIZATION
+// ==========================================
+
+async function startApp() {
+  console.log('🚀 [MAIN] Starting application initialization...');
+  
+  try {
+    // Load all modules
+    const modules = await loadModules();
+    
+    // Wait for DOM
+    if (document.readyState === 'loading') {
+      console.log('⏳ [MAIN] Waiting for DOM...');
+      await new Promise(resolve => {
+        document.addEventListener('DOMContentLoaded', resolve);
+      });
+    }
+    
+    console.log('✅ [MAIN] DOM ready');
+    
+    // Create app instance
+    new ChatApp(modules);
+    
+  } catch (error) {
+    console.error('❌ [MAIN] Fatal error:', error);
+  }
 }
+
+// Start the app
+startApp();
