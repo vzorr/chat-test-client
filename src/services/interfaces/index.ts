@@ -12,8 +12,11 @@ import {
   ConnectionState,
   UserRegistrationData,
   ConversationSettings,
-  ConversationParticipant
+  ConversationParticipant,
+  OnlineUser
 } from '../../types/chat';
+
+
 
 // ==========================================
 // Message Service Interface
@@ -303,4 +306,55 @@ export interface IAnalyticsService {
   trackError(error: Error, context?: Record<string, any>): void;
   setUserProperty(key: string, value: any): void;
   setUserId(userId: string): void;
+}
+
+
+// ==========================================
+// Realtime Service Interface - Complete
+// ==========================================
+export interface IRealtimeService {
+  // Connection management
+  connect(userId: string, token: string): Promise<void>;
+  disconnect(): void;
+  isConnected(): boolean;
+  getConnectionState(): ConnectionState;
+
+  // Message operations (real-time)
+  sendMessage(message: Message): void;
+  sendTypingIndicator(
+    conversationId: string, 
+    receiverId: string, 
+    isTyping: boolean
+  ): void;
+
+  // Online users management - NEW
+  getAllOnlineUsers(): void;
+  getOnlineUsersSync(): OnlineUser[];
+  isUserOnline(userId: string): boolean;
+  getOnlineCount(): number;
+  onOnlineUsersUpdate(callback: (users: OnlineUser[]) => void): () => void;
+
+  // Event subscriptions
+  onMessage(callback: (message: Message) => void): () => void;
+  onMessageSent(callback: (data: {
+    messageId: string;
+    clientTempId?: string;
+    conversationId: string;
+    status: string;
+  }) => void): () => void;
+  onMessageError(callback: (error: any) => void): () => void;
+  
+  onTyping(callback: (data: {
+    userId: string;
+    conversationId: string;
+    isTyping: boolean;
+  }) => void): () => void;
+  
+  onUserStatus(callback: (data: {
+    userId: string;
+    isOnline: boolean;
+    lastSeen?: string;
+  }) => void): () => void;
+  
+  onConnectionChange(callback: (state: ConnectionState) => void): () => void;
 }

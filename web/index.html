@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Test Client</title>
+  <title>Chat Test Client - With Online Users</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @keyframes pulse {
@@ -29,22 +29,6 @@
     }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e0;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #a0aec0;
-    }
   </style>
 </head>
 <body class="h-screen overflow-hidden bg-gray-100">
@@ -67,90 +51,105 @@
   </div>
 
   <!-- Chat Interface -->
-  <div id="chat-interface" class="hidden h-screen flex flex-col">
+  <div id="chat-interface" class="hidden h-screen flex">
     
-    <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold" id="user-avatar"></div>
-        <div>
-          <div class="font-semibold text-gray-800" id="user-name"></div>
-          <div class="text-sm text-gray-500" id="user-role"></div>
+    <!-- Online Users Sidebar -->
+    <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
+      <!-- Panel Header -->
+      <div class="px-4 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <h3 class="font-semibold text-gray-800">
+            Online Users
+            <span class="ml-2 px-2 py-0.5 text-xs font-bold bg-green-100 text-green-700 rounded-full" id="online-count">0</span>
+          </h3>
         </div>
+        <button 
+          id="toggle-panel" 
+          class="text-gray-500 hover:text-gray-700 transition-colors p-1 hover:bg-gray-100 rounded"
+        >
+          ▲
+        </button>
       </div>
-      <div class="flex items-center gap-2 text-sm">
-        <span class="w-2 h-2 rounded-full bg-gray-300" id="status-dot"></span>
-        <span id="connection-text" class="text-gray-600">Connecting...</span>
+
+      <!-- Panel Body -->
+      <div id="panel-body" class="flex-1 flex flex-col overflow-hidden">
+        <!-- Search -->
+        <div class="p-3 border-b border-gray-200">
+          <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input 
+              type="search" 
+              id="user-search" 
+              placeholder="Search users..."
+              class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        <!-- Users List -->
+        <div id="online-users-list" class="flex-1 overflow-y-auto p-2">
+          <!-- Users populated by app.js -->
+          <div class="text-center py-8 text-gray-500">
+            <div class="animate-spin w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-2"></div>
+            <p class="text-sm">Loading users...</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Main Container with 2-panel layout -->
-    <div class="flex-1 flex overflow-hidden">
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col">
       
-      <!-- Conversation List Panel -->
-      <div class="w-96 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
-        <!-- Header -->
-        <div class="p-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-800 mb-3">Conversations</h2>
-          
-          <!-- Search -->
-          <div class="relative">
-            <input 
-              type="text" 
-              id="conversation-search"
-              placeholder="Search conversations..." 
-              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            />
-            <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+      <!-- Header -->
+      <div class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold" id="user-avatar"></div>
+          <div>
+            <div class="font-semibold text-gray-800" id="user-name"></div>
+            <div class="text-sm text-gray-500" id="user-role"></div>
           </div>
         </div>
-
-        <!-- Conversation List -->
-        <div id="conversation-list" class="flex-1 overflow-y-auto">
-          <!-- Populated by app.js -->
+        <div class="flex items-center gap-2 text-sm">
+          <span class="w-2 h-2 rounded-full bg-gray-300" id="status-dot"></span>
+          <span id="connection-text" class="text-gray-600">Connecting...</span>
         </div>
       </div>
 
-      <!-- Active Chat Panel -->
-      <div class="flex-1 flex flex-col">
-        <!-- Messages Container -->
-        <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="messages-container">
-          <div class="text-center text-gray-500 py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <p class="text-sm">Select a conversation to start chatting</p>
-          </div>
-        </div>
+      <!-- Messages Container -->
+      <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="messages-container">
+        <!-- Messages populated by app.js -->
+      </div>
 
-        <!-- Typing Indicator -->
-        <div id="typing-indicator" class="hidden px-6 pb-2">
-          <div class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-xl shadow-sm">
-            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
-            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
-            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
-          </div>
+      <!-- Typing Indicator -->
+      <div id="typing-indicator" class="hidden px-6 pb-2">
+        <div class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-xl shadow-sm">
+          <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+          <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+          <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
         </div>
+      </div>
 
-        <!-- Input Container -->
-        <div class="bg-white border-t border-gray-200 px-6 py-4 flex gap-3">
-          <input 
-            type="text" 
-            id="message-input" 
-            placeholder="Type a message..."
-            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-          <button 
-            id="send-btn" 
-            class="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
-            </svg>
-          </button>
-        </div>
+      <!-- Input Container -->
+      <div class="bg-white border-t border-gray-200 px-6 py-4 flex gap-3">
+        <input 
+          type="text" 
+          id="message-input" 
+          placeholder="Type a message..."
+          class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+        <button 
+          id="send-btn" 
+          class="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>

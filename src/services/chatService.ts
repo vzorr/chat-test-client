@@ -36,36 +36,22 @@ import {
   ValidationException,
   NetworkException,
   AuthException,
-  UploadFileResponse
+  UploadFileResponse,
+  OnlineUser
 } from '../types/chat';
 
 // Import store types
 import { IChatStore, IChatActions, NoOpStore } from '../types/store';
 
-// =========================================================================
-// FIX: Replace dynamic 'require' for Redux actions with static 'import'
-// =========================================================================
-// Since Redux is a project dependency, we can safely use a static import
-// and let the bundler (Vite) handle the resolution.
 import * as messagingReducer from '../stores/reducer/messagingReducer';
 
 // Platform detection
 const isNodeEnvironment = typeof window === 'undefined' && typeof global !== 'undefined';
 
-// FIX: Change `require('react-native')` to a safe implementation
-// We'll use a local variable and rely on the Vite alias for `react-native`.
-// If the environment is not Node, we will assign the shim's Platform object.
 let Platform: { OS: 'node' | 'web' | 'ios' | 'android', Version: string | undefined } = {
   OS: isNodeEnvironment ? 'node' : 'web',
   Version: isNodeEnvironment ? process.version : 'v-shim'
 };
-
-// This line is prone to error if the bundler does not resolve the conditional require correctly.
-// Instead of the original line 44:
-// const Platform = isNodeEnvironment 
-//   ? { OS: 'node', Version: process.version } 
-//   : require('react-native').Platform; 
-// We are skipping the runtime require and relying on the static assignment above.
 
 // Define default actions using the static import
 const defaultActions: IChatActions = {
@@ -80,10 +66,6 @@ const defaultActions: IChatActions = {
   removeConversation: messagingReducer.removeConversation,
   syncConversations: messagingReducer.syncConversations,
 };
-// =========================================================================
-// END FIX
-// =========================================================================
-
 
 // Configuration constants
 const CHAT_CONFIG = {
@@ -95,6 +77,7 @@ const CHAT_CONFIG = {
   CLEANUP_INTERVAL: 5 * 60 * 1000, // 5 minutes
   DEFAULT_PAGE_SIZE: 50,
   DEFAULT_CONVERSATION_LIMIT: 20,
+  ONLINE_USERS_TIMEOUT: 5000, // 5 seconds
 } as const;
 
 /**
@@ -566,6 +549,173 @@ class ChatService {
   async isUserBlocked(userId: string): Promise<boolean> {
     this.checkInitialized();
     return this.userService.isUserBlocked(userId);
+  }
+
+  // ==========================================
+  // ONLINE USERS METHODS
+  // ==========================================
+
+  /**
+   * Get all online users from server (async version)
+   * Requests fresh data from server and returns it
+   */
+  async getAllOnlineUsersAsync(): Promise<OnlineUser[]> {
+    this.checkInitialized();
+    
+    return new Promise((resolve) => {
+      // Subscribe to next update
+      const unsubscribe = this.realtimeService.onOnlineUsersUpdate((users) => {
+        unsubscribe();
+        resolve(users);
+      });
+      
+      // Request from server
+      this.realtimeService.getAllOnlineUsers();
+      
+      // Timeout after configured seconds
+      setTimeout(() => {
+        unsubscribe();
+        resolve(this.realtimeService.getOnlineUsersSync());
+      }, CHAT_CONFIG.ONLINE_USERS_TIMEOUT);
+    });
+  }
+
+  /**
+   * Get all online users from server (fire and forget)
+   */
+  getAllOnlineUsers(): void {
+    this.checkInitialized();
+    this.realtimeService.getAllOnlineUsers();
+  }
+
+  /**
+   * Get online users from local cache (synchronous)
+   */
+  getOnlineUsers(): OnlineUser[] {
+    this.checkInitialized();
+    return this.realtimeService.getOnlineUsersSync();
+  }
+
+  /**
+   * Check if a specific user is online
+   */
+  isUserOnline(userId: string): boolean {
+    this.checkInitialized();
+    return this.realtimeService.isUserOnline(userId);
+  }
+
+  /**
+   * Get count of online users
+   */
+  getOnlineCount(): number {
+    this.checkInitialized();
+    return this.realtimeService.getOnlineCount();
+  }
+
+  /**
+   * Subscribe to online users changes
+   * Returns unsubscribe function
+   */
+  onOnlineUsersChange(callback: (users: OnlineUser[]) => void): () => void {
+    this.checkInitialized();
+    return this.realtimeService.onOnlineUsersUpdate(callback);
+  }
+
+  /**
+   * Get detailed online user info by ID
+   */
+  getOnlineUserDetails(userId: string): OnlineUser | null {
+    this.checkInitialized();
+    
+    const users = this.getOnlineUsers();
+    return users.find(u => u.id === userId) || null;
+  }
+
+  /**
+   * Get detailed online user info by ID (async version with refresh)
+   */
+  async getOnlineUserDetailsAsync(userId: string): Promise<OnlineUser | null> {
+    this.checkInitialized();
+    
+    // First check cache
+    const cached = this.getOnlineUserDetails(userId);
+    if (cached) {
+      return cached;
+    }
+    
+    // If not in cache, request fresh list
+    await this.getAllOnlineUsersAsync();
+    
+    // Check again
+    return this.getOnlineUserDetails(userId);
+  }
+
+  /**
+   * Search online users by name
+   */
+  searchOnlineUsers(searchTerm: string): OnlineUser[] {
+    this.checkInitialized();
+    
+    if (!searchTerm?.trim()) {
+      return this.getOnlineUsers();
+    }
+    
+    const term = searchTerm.toLowerCase();
+    return this.getOnlineUsers().filter(user => 
+      user.name.toLowerCase().includes(term) ||
+      user.email?.toLowerCase().includes(term) ||
+      user.role?.toLowerCase().includes(term)
+    );
+  }
+
+  /**
+   * Get online users grouped by role
+   */
+  getOnlineUsersByRole(): Record<string, OnlineUser[]> {
+    this.checkInitialized();
+    
+    const users = this.getOnlineUsers();
+    const grouped: Record<string, OnlineUser[]> = {};
+    
+    users.forEach(user => {
+      const role = user.role || 'unknown';
+      if (!grouped[role]) {
+        grouped[role] = [];
+      }
+      grouped[role].push(user);
+    });
+    
+    return grouped;
+  }
+
+  /**
+   * Get online statistics
+   */
+  getOnlineStats(): {
+    total: number;
+    byRole: Record<string, number>;
+    byStatus: Record<string, number>;
+  } {
+    this.checkInitialized();
+    
+    const users = this.getOnlineUsers();
+    const stats = {
+      total: users.length,
+      byRole: {} as Record<string, number>,
+      byStatus: {} as Record<string, number>
+    };
+    
+    users.forEach(user => {
+      // Count by role
+      const role = user.role || 'unknown';
+      stats.byRole[role] = (stats.byRole[role] || 0) + 1;
+      
+      // Count by status
+      const status = user.status || 'available';
+      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+    });
+    
+    return stats;
   }
 
   // ==========================================

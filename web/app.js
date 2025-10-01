@@ -1,12 +1,7 @@
-// web/app.js - Final integrated version with managers
+// web/app.js - Enhanced with Online Users Panel
 import { chatService } from '../src/services/ChatService.ts';
 import { AuthService } from '../src/services/AuthService.ts';
 import { ConnectionState, MessageStatus } from '../src/types/chat.ts';
-import { ConversationManager } from './managers/ConversationManager.js';
-import { MessageManager } from './managers/MessageManager.js';
-import { SocketEventManager } from './managers/SocketEventManager.js';
-import { ConversationList } from './components/ConversationList.js';
-import { EventBus } from './utils/EventBus.js';
 
 const USER_PROFILES = [
   {
@@ -21,9 +16,9 @@ const USER_PROFILES = [
   },
   {
     id: 'customer-001',
-    name: 'John Doe',
+    name: 'Amir Sohail',
     role: 'customer',
-    email: 'john@example.com',
+    email: 'amirsohail681@gmail.com',
     phone: '+355987654321',
     password: 'Password123@',
     receiverId: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
@@ -35,16 +30,11 @@ class ChatApp {
   constructor() {
     this.currentUser = null;
     this.conversationId = null;
+    this.messageHistory = [];
+    this.onlineUsers = [];
     this.jobId = `job-${Date.now()}`;
     this.jobTitle = 'Service Request';
-    
-    // Managers
-    this.conversationManager = null;
-    this.messageManager = null;
-    this.socketEventManager = null;
-    
-    // Components
-    this.conversationList = null;
+    this.searchTerm = '';
     
     this.init();
   }
@@ -101,6 +91,7 @@ class ChatApp {
       console.log('🔐 Attempting login...');
       
       const connectBtn = document.getElementById('connect-btn');
+      const originalText = connectBtn.textContent;
       connectBtn.textContent = 'Logging in...';
       connectBtn.disabled = true;
 
@@ -128,7 +119,7 @@ class ChatApp {
       connectBtn.textContent = 'Connect to Chat';
       connectBtn.disabled = false;
       
-      alert('Login failed: ' + error.message);
+      alert('Login failed: ' + error.message + '\n\nPlease check your credentials.');
     }
   }
 
@@ -142,16 +133,16 @@ class ChatApp {
       document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
       this.updateConnectionStatus('connecting', 'Connecting...');
 
-      window.currentUserId = this.currentUser.userData.id || this.currentUser.id;
+      console.log('🚀 Initializing chat with token:', this.currentUser.token.substring(0, 20) + '...');
 
       await chatService.initialize(
-        window.currentUserId,
+        this.currentUser.userData.id || this.currentUser.id,
         this.currentUser.role,
         this.currentUser.token,
         undefined,
         {
-          id: window.currentUserId,
-          externalId: window.currentUserId,
+          id: this.currentUser.userData.id || this.currentUser.id,
+          externalId: this.currentUser.userData.id || this.currentUser.id,
           name: this.currentUser.name,
           email: this.currentUser.email,
           phone: this.currentUser.phone,
@@ -159,26 +150,11 @@ class ChatApp {
         }
       );
 
-      // Initialize managers
-      this.socketEventManager = new SocketEventManager(chatService);
-      this.socketEventManager.initialize();
-
-      this.messageManager = new MessageManager(chatService);
-      this.messageManager.initialize();
-
-      this.conversationManager = new ConversationManager(chatService);
-      await this.conversationManager.initialize();
-
-      // Initialize UI components
-      this.conversationList = new ConversationList();
-      this.conversationList.init('conversation-list');
-
-      // Setup event listeners
       this.setupEventListeners();
+      this.setupOnlineUsersPanel(); // NEW
+      await this.setupConversation();
       this.attachInputEvents();
-
-      // Setup initial conversation
-      await this.setupInitialConversation();
+      this.attachOnlineUsersPanelEvents(); // NEW
 
       this.updateConnectionStatus('connected', 'Connected');
       console.log('✅ Chat connected successfully');
@@ -198,8 +174,7 @@ class ChatApp {
   }
 
   setupEventListeners() {
-    // Connection state
-    EventBus.on('connection:state', (state) => {
+    chatService.onConnectionStateChange((state) => {
       const stateMap = {
         [ConnectionState.CONNECTED]: { status: 'connected', text: 'Connected' },
         [ConnectionState.CONNECTING]: { status: 'connecting', text: 'Connecting...' },
@@ -212,161 +187,160 @@ class ChatApp {
       this.updateConnectionStatus(status, text);
     });
 
-    // Messages loaded
-    EventBus.on('messages:loaded', (data) => {
-      this.renderMessages(data.messages);
+    chatService.onNewMessage((message) => {
+      console.log('💬 New message:', message);
+      this.messageHistory.push(message);
+      this.renderMessage(message);
     });
 
-    // Message received
-    EventBus.on('socket:message_received', (message) => {
-      if (message.conversationId === this.conversationId) {
-        this.renderMessage(message);
-      }
+    chatService.onMessageSent((data) => {
+      console.log('✅ Message sent:', data.messageId);
     });
 
-    // Message status updates
-    EventBus.on('socket:message_sent', (data) => {
-      this.updateMessageStatus(data.messageId, MessageStatus.SENT);
+    chatService.onMessageSendError((data) => {
+      console.error('❌ Send error:', data.error);
+      this.showError('Failed to send message');
     });
 
-    EventBus.on('socket:message_delivered', (data) => {
-      this.updateMessageStatus(data.messageId, MessageStatus.DELIVERED);
-    });
-
-    EventBus.on('socket:message_read', (data) => {
-      if (data.messageIds) {
-        data.messageIds.forEach(msgId => {
-          this.updateMessageStatus(msgId, MessageStatus.READ);
-        });
-      }
-    });
-
-    EventBus.on('socket:messages_read', (data) => {
-      if (data.messageIds) {
-        data.messageIds.forEach(msgId => {
-          this.updateMessageStatus(msgId, MessageStatus.READ);
-        });
-      }
-    });
-
-    EventBus.on('message:error', (data) => {
-      if (data.clientTempId) {
-        this.updateMessageStatusByTempId(data.clientTempId, MessageStatus.FAILED);
-      }
-    });
-
-    // Typing indicator
-    EventBus.on('socket:user_typing', ({ userId, isTyping }) => {
-      if (userId !== window.currentUserId) {
+    chatService.onTyping((userId, isTyping) => {
+      if (userId !== this.currentUser.id) {
         this.showTypingIndicator(isTyping);
       }
     });
+  }
 
-    // Conversation selected
-    EventBus.on('conversation:selected', (conversationId) => {
-      this.loadConversation(conversationId);
+  // ==========================================
+  // ONLINE USERS PANEL - NEW
+  // ==========================================
+
+  setupOnlineUsersPanel() {
+    // Subscribe to online users updates
+    chatService.onOnlineUsersChange((users) => {
+      console.log('👥 Online users updated:', users.length);
+      this.onlineUsers = users;
+      this.renderOnlineUsers();
     });
+
+    // Request initial list
+    chatService.getAllOnlineUsers();
+
+    // Auto-refresh every 30 seconds as fallback
+    setInterval(() => {
+      chatService.getAllOnlineUsers();
+    }, 30000);
   }
 
-  async setupInitialConversation() {
-    try {
-      const conversation = await this.conversationManager.findOrCreateConversation(
-        this.jobId,
-        this.currentUser.receiverId
-      );
-
-      this.conversationId = conversation.id;
-      await this.loadConversation(this.conversationId);
-      
-    } catch (error) {
-      console.error('❌ Failed to setup initial conversation:', error);
-    }
-  }
-
-  async loadConversation(conversationId) {
-    this.conversationId = conversationId;
-    this.messageManager.setActiveConversation(conversationId);
-
-    const container = document.getElementById('messages-container');
-    container.innerHTML = '<div class="text-center py-4"><div class="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto"></div></div>';
+  renderOnlineUsers() {
+    const container = document.getElementById('online-users-list');
+    const countBadge = document.getElementById('online-count');
     
-    try {
-      await this.messageManager.loadMessages(conversationId);
-    } catch (error) {
-      console.error('❌ Failed to load messages:', error);
-      container.innerHTML = '<div class="text-center text-red-500 py-8">Failed to load messages</div>';
-    }
-  }
+    // Filter by search term
+    const filtered = this.searchTerm
+      ? this.onlineUsers.filter(user => 
+          user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
+        )
+      : this.onlineUsers;
 
-  renderMessages(messages) {
-    const container = document.getElementById('messages-container');
-    container.innerHTML = '';
-    messages.forEach(msg => this.renderMessage(msg, false));
-  }
+    // Update count
+    countBadge.textContent = this.onlineUsers.length;
 
-  renderMessage(message, animate = true) {
-    const container = document.getElementById('messages-container');
-    const isMine = message.senderId === window.currentUserId;
-    const statusIcon = this.getStatusIcon(message.status);
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message flex ${isMine ? 'justify-end' : 'justify-start'} mb-4`;
-    messageDiv.dataset.messageId = message.id;
-    messageDiv.dataset.clientTempId = message.clientTempId;
-    
-    if (!animate) messageDiv.style.animation = 'none';
-
-    messageDiv.innerHTML = `
-      <div class="max-w-[70%]">
-        ${!isMine ? `<div class="text-xs text-gray-500 mb-1 ml-2">${this.currentUser.receiverName}</div>` : ''}
-        <div class="rounded-2xl px-4 py-3 ${
-          isMine 
-            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm' 
-            : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
-        }">
-          <div class="break-words">${this.escapeHtml(message.content)}</div>
-          <div class="text-xs mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
-            <span>${this.formatTime(message.timestamp)}</span>
-            ${isMine ? `<span class="message-status">${statusIcon}</span>` : ''}
-          </div>
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-gray-500">
+          <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <p>${this.searchTerm ? 'No users found' : 'No users online'}</p>
         </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = filtered.map(user => `
+      <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer group">
+        <div class="relative">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+            ${user.name.charAt(0).toUpperCase()}
+          </div>
+          <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-800 truncate">${this.escapeHtml(user.name)}</div>
+          <div class="text-xs text-gray-500 capitalize">${user.role || 'user'}</div>
+        </div>
+        ${user.id !== this.currentUser.userData.id && user.id !== this.currentUser.id ? `
+          <button 
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+            onclick="window.chatApp.startChatWith('${user.id}', '${this.escapeHtml(user.name)}')"
+          >
+            Chat
+          </button>
+        ` : ''}
       </div>
-    `;
-
-    container.appendChild(messageDiv);
-    container.scrollTop = container.scrollHeight;
+    `).join('');
   }
 
-  updateMessageStatus(messageId, status) {
-    const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
-    if (messageDiv) {
-      const statusEl = messageDiv.querySelector('.message-status');
-      if (statusEl) {
-        statusEl.innerHTML = this.getStatusIcon(status);
-      }
+  attachOnlineUsersPanelEvents() {
+    // Toggle panel
+    const toggleBtn = document.getElementById('toggle-panel');
+    const panelBody = document.getElementById('panel-body');
+    
+    toggleBtn.addEventListener('click', () => {
+      panelBody.classList.toggle('hidden');
+      toggleBtn.textContent = panelBody.classList.contains('hidden') ? '▼' : '▲';
+    });
+
+    // Search users
+    const searchInput = document.getElementById('user-search');
+    searchInput.addEventListener('input', (e) => {
+      this.searchTerm = e.target.value;
+      this.renderOnlineUsers();
+    });
+
+    // Make this available for onclick handlers
+    window.chatApp = this;
+  }
+
+  async startChatWith(userId, userName) {
+    console.log(`💬 Starting chat with ${userName} (${userId})`);
+    // You can implement this to switch conversations
+    alert(`Starting chat with ${userName} - Coming soon!`);
+  }
+
+  // ==========================================
+  // EXISTING METHODS (unchanged)
+  // ==========================================
+
+  async setupConversation() {
+    console.log('🔍 Setting up conversation...');
+    
+    const conversation = await chatService.findOrCreateJobConversation(
+      this.jobId,
+      this.currentUser.receiverId
+    );
+
+    this.conversationId = conversation.id;
+    console.log('✅ Conversation ready:', this.conversationId);
+
+    const result = await chatService.loadMessages(this.conversationId, {
+      page: 1,
+      limit: 50
+    });
+
+    this.messageHistory = result.messages;
+    console.log(`📜 Loaded ${result.messages.length} messages`);
+
+    result.messages.forEach(msg => this.renderMessage(msg, false));
+
+    if (result.messages.length === 0) {
+      setTimeout(() => {
+        chatService.sendTextMessage(
+          this.conversationId,
+          `Hello! I'm ${this.currentUser.name}. How can I help you today?`,
+          this.currentUser.receiverId
+        );
+      }, 1000);
     }
-  }
-
-  updateMessageStatusByTempId(clientTempId, status) {
-    const messageDiv = document.querySelector(`[data-client-temp-id="${clientTempId}"]`);
-    if (messageDiv) {
-      const statusEl = messageDiv.querySelector('.message-status');
-      if (statusEl) {
-        statusEl.innerHTML = this.getStatusIcon(status);
-      }
-    }
-  }
-
-  getStatusIcon(status) {
-    const icons = {
-      [MessageStatus.SENDING]: '⏳',
-      [MessageStatus.SENT]: '✓',
-      [MessageStatus.DELIVERED]: '✓✓',
-      [MessageStatus.READ]: '<span class="text-blue-300">✓✓</span>',
-      [MessageStatus.FAILED]: '❌',
-      [MessageStatus.QUEUED]: '📥'
-    };
-    return icons[status] || '';
   }
 
   attachInputEvents() {
@@ -384,6 +358,7 @@ class ChatApp {
         );
 
         clearTimeout(typingTimeout);
+
         typingTimeout = setTimeout(() => {
           chatService.sendTypingIndicator(
             this.conversationId,
@@ -421,7 +396,7 @@ class ChatApp {
         false
       );
 
-      await this.messageManager.sendMessage(
+      await chatService.sendTextMessage(
         this.conversationId,
         text,
         this.currentUser.receiverId
@@ -429,8 +404,55 @@ class ChatApp {
 
     } catch (error) {
       console.error('❌ Failed to send:', error);
+      this.showError('Failed to send message');
       input.value = text;
     }
+  }
+
+  renderMessage(message, animate = true) {
+    const container = document.getElementById('messages-container');
+    const isMine = message.senderId === this.currentUser.userData?.id || message.senderId === this.currentUser.id;
+    const statusIcon = this.getStatusIcon(message.status);
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message flex ${isMine ? 'justify-end' : 'justify-start'} mb-4`;
+    
+    if (!animate) {
+      messageDiv.style.animation = 'none';
+    }
+
+    messageDiv.innerHTML = `
+      <div class="max-w-[70%]">
+        ${!isMine ? `<div class="text-xs text-gray-500 mb-1 ml-2">${this.currentUser.receiverName}</div>` : ''}
+        <div class="rounded-2xl px-4 py-3 ${
+          isMine 
+            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm' 
+            : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
+        }">
+          <div class="break-words">${this.escapeHtml(message.content)}</div>
+          <div class="text-xs mt-1 flex items-center gap-1 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
+            <span>${this.formatTime(message.timestamp)}</span>
+            ${isMine ? `<span>${statusIcon}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  getStatusIcon(status) {
+    const icons = {
+      [MessageStatus.SENDING]: '⏳',
+      [MessageStatus.SENT]: '✓',
+      [MessageStatus.DELIVERED]: '✓✓',
+      [MessageStatus.READ]: '✓✓',
+      [MessageStatus.FAILED]: '❌',
+      [MessageStatus.QUEUED]: '📥',
+      [MessageStatus.EXPIRED]: '⏰'
+    };
+    return icons[status] || '';
   }
 
   formatTime(timestamp) {
@@ -470,6 +492,10 @@ class ChatApp {
     } else {
       indicator.classList.add('hidden');
     }
+  }
+
+  showError(message) {
+    console.error(message);
   }
 
   escapeHtml(text) {

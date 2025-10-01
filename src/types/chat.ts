@@ -1184,3 +1184,60 @@ export const USER_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   [UserRole.CUSTOMER]: ['send_messages', 'send_attachments'],
   [UserRole.SYSTEM]: ['send_system_messages'],
 };
+
+// Add these to your existing src/types/chat.ts file
+
+// ========================================
+// ONLINE USERS INTERFACES
+// ========================================
+
+/**
+ * Online user information for real-time presence
+ */
+export interface OnlineUser {
+  id: string;
+  name: string;
+  avatar?: string;
+  isOnline: boolean;
+  lastSeen?: string;
+  role?: UserRole;
+  status?: 'available' | 'busy' | 'away' | 'do_not_disturb';
+  email?: string;
+  phone?: string;
+}
+
+/**
+ * Response from server with online users list
+ */
+export interface OnlineUsersResponse {
+  users: OnlineUser[];
+  count: number;
+  timestamp: string;
+}
+
+/**
+ * User status change event
+ */
+export interface UserStatusChangeEvent {
+  userId: string;
+  userName: string;
+  isOnline: boolean;
+  lastSeen?: string;
+  timestamp: string;
+}
+
+/**
+ * Online users statistics
+ */
+export interface OnlineUsersStats {
+  total: number;
+  byRole: Record<string, number>;
+  byStatus: Record<string, number>;
+}
+
+/**
+ * Online users grouped by role
+ */
+export interface OnlineUsersByRole {
+  [role: string]: OnlineUser[];
+}

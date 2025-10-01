@@ -1,33 +1,9 @@
-// SocketService.ts - Enhanced with proper types and memory leak prevention
+// src/services/implementations/SocketService.ts - Final Complete Version with Online Users
 import io, { Socket } from 'socket.io-client';
-import { Attachment, AttachmentType, Message, MessageStatus, MessageType } from '../../types/chat';
+import { Attachment, AttachmentType, Message, MessageStatus, MessageType, OnlineUser } from '../../types/chat';
 import { AppConfig, SocketConfig, AppLogger } from '../../config/AppConfig';
 import { IRealtimeService } from '../interfaces';
 
-// Typed event callbacks
-type MessageCallback = (message: Message) => void;
-type MessageSentCallback = (data: {
-  messageId: string;
-  clientTempId?: string;
-  conversationId: string;
-  status: string;
-  timestamp?: string;
-}) => void;
-type MessageErrorCallback = (error: any) => void;
-type TypingCallback = (data: {
-  userId: string;
-  conversationId: string;
-  isTyping: boolean;
-}) => void;
-type UserStatusCallback = (data: {
-  userId: string;
-  isOnline: boolean;
-  lastSeen?: string;
-}) => void;
-type ConnectionCallback = (state: ConnectionState) => void;
-type SocketCallback = (...args: any[]) => void;
-
-// Connection state enum for clearer state management
 export enum ConnectionState {
   DISCONNECTED = 'disconnected',
   CONNECTING = 'connecting',
@@ -36,11 +12,19 @@ export enum ConnectionState {
   ERROR = 'error'
 }
 
-// Event listener tracking for memory management
+type MessageCallback = (message: Message) => void;
+type MessageSentCallback = (data: any) => void;
+type MessageErrorCallback = (error: any) => void;
+type TypingCallback = (data: any) => void;
+type UserStatusCallback = (data: any) => void;
+type ConnectionCallback = (state: ConnectionState) => void;
+type OnlineUsersCallback = (users: OnlineUser[]) => void;
+type SocketCallback = (...args: any[]) => void;
+
 interface TrackedListener {
   event: string;
   callback: SocketCallback;
-  originalCallback: SocketCallback; // Keep reference to original for removal
+  originalCallback: SocketCallback;
   timestamp: number;
 }
 
@@ -54,6 +38,10 @@ class SocketService implements IRealtimeService {
   private connectionState: ConnectionState = ConnectionState.DISCONNECTED;
   private isConnecting: boolean = false;
   private connectionPromise: Promise<void> | null = null;
+  
+  // Online users tracking
+  private onlineUsers: Map<string, OnlineUser> = new Map();
+  private onlineUsersCallbacks: OnlineUsersCallback[] = [];
   
   // Memory leak prevention
   private listenerIdCounter = 0;
@@ -72,16 +60,88 @@ class SocketService implements IRealtimeService {
       maxReconnectAttempts: this.maxReconnectAttempts
     });
     
-    // Start periodic cleanup to prevent memory leaks
     this.startPeriodicCleanup();
   }
 
-  // IRealtimeService Implementation
+  // ==========================================
+  // ONLINE USERS METHODS
+  // ==========================================
+
+  /**
+   * Request all online users from server
+   */
+  getAllOnlineUsers(): void {
+    if (!this.socket?.connected) {
+      AppLogger.warn('Cannot get online users: Socket not connected');
+      return;
+    }
+    
+    AppLogger.debug('Requesting all online users');
+    this.socket.emit('get_all_online_users');
+  }
+
+  /**
+   * Get online users from local cache (synchronous)
+   */
+  getOnlineUsersSync(): OnlineUser[] {
+    return Array.from(this.onlineUsers.values());
+  }
+
+  /**
+   * Check if specific user is online
+   */
+  isUserOnline(userId: string): boolean {
+    return this.onlineUsers.has(userId);
+  }
+
+  /**
+   * Get count of online users
+   */
+  getOnlineCount(): number {
+    return this.onlineUsers.size;
+  }
+
+  /**
+   * Subscribe to online users updates
+   */
+  onOnlineUsersUpdate(callback: OnlineUsersCallback): () => void {
+    this.onlineUsersCallbacks.push(callback);
+    
+    // Immediately call with current users if we have any
+    if (this.onlineUsers.size > 0) {
+      callback(this.getOnlineUsersSync());
+    }
+    
+    return () => {
+      const index = this.onlineUsersCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onlineUsersCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Notify all subscribers of online users update
+   */
+  private notifyOnlineUsersUpdate(): void {
+    const users = this.getOnlineUsersSync();
+    this.onlineUsersCallbacks.forEach(callback => {
+      try {
+        callback(users);
+      } catch (error) {
+        AppLogger.error('Error in online users callback:', error);
+      }
+    });
+  }
+
+  // ==========================================
+  // CONNECTION MANAGEMENT
+  // ==========================================
 
   async connect(userId: string, token: string): Promise<void> {
     if (this.socket?.connected && this.userId === userId) {
       AppLogger.info('Already connected with same userId');
-      return Promise.resolve();
+      return;
     }
 
     if (this.connectionPromise) {
@@ -101,12 +161,11 @@ class SocketService implements IRealtimeService {
 
     this.connectionPromise = this.createConnection(userId, token);
     
-    // Clear promise when done
-    this.connectionPromise.finally(() => {
+    try {
+      await this.connectionPromise;
+    } finally {
       this.connectionPromise = null;
-    });
-
-    return this.connectionPromise;
+    }
   }
 
   disconnect(): void {
@@ -129,6 +188,10 @@ class SocketService implements IRealtimeService {
       this.connectionPromise = null;
       this.setConnectionState(ConnectionState.DISCONNECTED);
       
+      // Clear online users
+      this.onlineUsers.clear();
+      this.notifyOnlineUsersUpdate();
+      
       // Stop cleanup timer
       this.stopPeriodicCleanup();
     }
@@ -146,7 +209,10 @@ class SocketService implements IRealtimeService {
     return this.connectionState;
   }
 
-  // Message operations
+  // ==========================================
+  // MESSAGE OPERATIONS
+  // ==========================================
+
   sendMessage(message: Message): void {
     if (!this.socket || !this.userId || !this.socket.connected) {
       throw new Error('Socket not connected');
@@ -204,7 +270,9 @@ class SocketService implements IRealtimeService {
     });
   }
 
-  // Enhanced event subscription with memory leak prevention
+  // ==========================================
+  // EVENT SUBSCRIPTIONS
+  // ==========================================
 
   onMessage(callback: MessageCallback): () => void {
     return this.on('message_received', callback);
@@ -238,7 +306,6 @@ class SocketService implements IRealtimeService {
     return this.on('connection_state_change', callback);
   }
 
-  // Enhanced listener management with memory leak prevention
   on(event: string, callback: SocketCallback): () => void {
     const listenerId = `${event}_${++this.listenerIdCounter}_${Date.now()}`;
     
@@ -249,10 +316,8 @@ class SocketService implements IRealtimeService {
       timestamp: Date.now()
     };
     
-    // Store in tracked listeners
     this.activeListeners.set(listenerId, trackedListener);
     
-    // Add to event-specific list
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
@@ -262,13 +327,14 @@ class SocketService implements IRealtimeService {
       AppLogger.info(`Listener added for event: ${event} (ID: ${listenerId})`);
     }
     
-    // Return unsubscribe function
     return () => {
       this.removeListener(listenerId, event);
     };
   }
 
-  // Private methods
+  // ==========================================
+  // PRIVATE CONNECTION METHODS
+  // ==========================================
 
   private async createConnection(userId: string, token: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -299,6 +365,7 @@ class SocketService implements IRealtimeService {
 
         this.setupSocketEventHandlers(connectionTimeout, resolve, reject);
         this.setupMessageHandlers();
+        this.setupOnlineUsersHandlers();
 
       } catch (error) {
         AppLogger.error('Socket setup error:', error);
@@ -348,6 +415,10 @@ class SocketService implements IRealtimeService {
       this.isConnecting = false;
       this.setConnectionState(ConnectionState.CONNECTED);
       this.emit('connection_change', true);
+      
+      // Request online users after connection
+      this.getAllOnlineUsers();
+      
       resolve();
     });
 
@@ -356,6 +427,10 @@ class SocketService implements IRealtimeService {
       clearTimeout(connectionTimeout);
       this.setConnectionState(ConnectionState.DISCONNECTED);
       this.emit('connection_change', false);
+      
+      // Clear online users on disconnect
+      this.onlineUsers.clear();
+      this.notifyOnlineUsersUpdate();
     });
 
     this.socket.on('connect_error', (error: any) => {
@@ -377,6 +452,9 @@ class SocketService implements IRealtimeService {
       AppLogger.info(`Reconnected successfully after ${attemptNumber} attempts`);
       this.setConnectionState(ConnectionState.CONNECTED);
       this.emit('connection_change', true);
+      
+      // Request online users after reconnection
+      this.getAllOnlineUsers();
     });
   }
 
@@ -409,6 +487,71 @@ class SocketService implements IRealtimeService {
     });
   }
 
+  private setupOnlineUsersHandlers(): void {
+    if (!this.socket) return;
+
+    // Initial data with online users list
+    this.socket.on('initial_data', (data: any) => {
+      AppLogger.info('Initial data received', { 
+        hasOnlineUsers: !!data.onlineUsers,
+        count: data.onlineUsers?.length || 0
+      });
+      
+      if (data.onlineUsers && Array.isArray(data.onlineUsers)) {
+        this.onlineUsers.clear();
+        data.onlineUsers.forEach((user: OnlineUser) => {
+          this.onlineUsers.set(user.id, user);
+        });
+        AppLogger.info(`Loaded ${this.onlineUsers.size} online users from initial data`);
+        this.notifyOnlineUsersUpdate();
+      }
+    });
+
+    // User comes online
+    this.socket.on('user_online', (data: any) => {
+      const user: OnlineUser = {
+        id: data.id,
+        name: data.name,
+        avatar: data.avatar,
+        isOnline: true,
+        lastSeen: data.lastSeen,
+        role: data.role,
+        status: data.status
+      };
+      
+      this.onlineUsers.set(user.id, user);
+      AppLogger.debug(`User ${user.name} (${user.id}) came online`);
+      this.notifyOnlineUsersUpdate();
+    });
+
+    // User goes offline
+    this.socket.on('user_offline', (data: any) => {
+      const userId = data.id;
+      const userName = data.name || this.onlineUsers.get(userId)?.name || 'Unknown';
+      
+      this.onlineUsers.delete(userId);
+      AppLogger.debug(`User ${userName} (${userId}) went offline`);
+      this.notifyOnlineUsersUpdate();
+    });
+
+    // Response to get_all_online_users
+    this.socket.on('all_online_users', (data: any) => {
+      AppLogger.info(`Received all_online_users response: ${data.count} users`);
+      
+      this.onlineUsers.clear();
+      if (data.users && Array.isArray(data.users)) {
+        data.users.forEach((user: OnlineUser) => {
+          this.onlineUsers.set(user.id, user);
+        });
+      }
+      this.notifyOnlineUsersUpdate();
+    });
+  }
+
+  // ==========================================
+  // PRIVATE HELPER METHODS
+  // ==========================================
+
   private setConnectionState(state: ConnectionState): void {
     const previousState = this.connectionState;
     this.connectionState = state;
@@ -432,10 +575,8 @@ class SocketService implements IRealtimeService {
   }
 
   private removeListener(listenerId: string, event: string): void {
-    // Remove from active listeners
     this.activeListeners.delete(listenerId);
     
-    // Remove from event-specific list
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       const index = callbacks.findIndex(l => 
@@ -457,10 +598,9 @@ class SocketService implements IRealtimeService {
   private removeAllListeners(): void {
     this.activeListeners.clear();
     this.listeners.clear();
+    this.onlineUsersCallbacks = [];
     AppLogger.info('All listeners removed');
   }
-
-  // Memory leak prevention methods
 
   private startPeriodicCleanup(): void {
     this.cleanupTimer = setInterval(() => {
@@ -491,7 +631,9 @@ class SocketService implements IRealtimeService {
     }
   }
 
-  // Message transformation methods
+  // ==========================================
+  // MESSAGE TRANSFORMATION
+  // ==========================================
 
   private transformOutgoingMessage(message: Message): any {
     return {
@@ -555,7 +697,9 @@ class SocketService implements IRealtimeService {
     return attachments;
   }
 
-  // Utility methods
+  // ==========================================
+  // UTILITY METHODS
+  // ==========================================
 
   getSocketId(): string | null {
     return this.socket?.id || null;
