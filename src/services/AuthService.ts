@@ -1,4 +1,4 @@
-// AuthService.ts - Updated with correct login endpoint
+// AuthService.ts - Fixed with correct login endpoint and response handling
 import { AppConfig } from '../config/AppConfig';
 import { logger } from '../utils/Logger';
 import { BaseApiClient } from './api/base/BaseApiClient';
@@ -68,14 +68,26 @@ export class AuthService {
         throw new Error(response?.message || 'Login failed');
       }
 
-      // Server response structure: { success, code, message, result: { userId, token, ... } }
-      const responseData = response.result || response.data || response;
-      const { token, refreshToken, userId, firstName, lastName, email } = responseData;
+      // Server response structure: { success, code, message, result: { userId, token, firstName, lastName, email, role } }
+      const result = response.result;
 
-      if (!token) {
+      if (!result || !result.token) {
         console.error('Login response:', JSON.stringify(response, null, 2));
         throw new Error('No token received from server');
       }
+
+      const { token, refreshToken, userId, firstName, lastName, email, role: userRole } = result;
+
+      // Construct user object from response
+      const user = {
+        id: userId,
+        name: `${firstName || ''} ${lastName || ''}`.trim() || 'User',
+        email: email || emailOrPhone,
+        phone: emailOrPhone.includes('@') ? '' : emailOrPhone,
+        role: userRole || role,
+        firstName,
+        lastName
+      };
 
       // TODO: Store tokens using injected storage service
       // await this.storageService.set('userToken', token);
@@ -86,22 +98,15 @@ export class AuthService {
       apiClient.setToken(token);
 
       logger.info('Login successful', { 
-        userId: user?.id,
-        role: user?.role || role
+        userId: user.id,
+        role: user.role
       });
 
       return {
         success: true,
         token,
         refreshToken,
-        user: {
-          id: user?.id,
-          name: user?.name,
-          email: user?.email,
-          phone: user?.phone,
-          role: user?.role || role,
-          ...user
-        }
+        user
       };
 
     } catch (error) {
