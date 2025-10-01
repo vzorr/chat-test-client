@@ -1,66 +1,33 @@
-// web/app.js - Enhanced with Comprehensive Debug Logging
+// web/app.js - Final Working Version
 console.log('========================================');
 console.log('📦 APP.JS LOADING STARTED');
 console.log('========================================');
-console.log('Current URL:', window.location.href);
-console.log('Document ready state:', document.readyState);
-console.log('Import meta:', import.meta);
 
 // ==========================================
-// DYNAMIC IMPORTS WITH DETAILED LOGGING
+// DYNAMIC IMPORTS
 // ==========================================
-
 async function loadModules() {
   console.log('\n🔄 [STEP 1] Starting module imports...');
   
   try {
-    // Import chatService
-    console.log('  → Importing chatService...');
     const chatServiceModule = await import('../src/services/chatService');
-    console.log('  ✅ chatService module loaded:', Object.keys(chatServiceModule));
     const { chatService } = chatServiceModule;
-    console.log('  ✅ chatService instance:', chatService ? 'EXISTS' : 'MISSING');
+    console.log('  ✅ chatService loaded');
     
-    // Import AuthService
-    console.log('  → Importing AuthService...');
     const authModule = await import('../src/services/AuthService');
-    console.log('  ✅ AuthService module loaded:', Object.keys(authModule));
     const { AuthService } = authModule;
-    console.log('  ✅ AuthService class:', AuthService ? 'EXISTS' : 'MISSING');
+    console.log('  ✅ AuthService loaded');
     
-    // Import types
-    console.log('  → Importing chat types...');
     const typesModule = await import('../src/types/chat');
-    console.log('  ✅ Types module loaded, keys:', Object.keys(typesModule).slice(0, 10));
     const { ConnectionState, MessageStatus } = typesModule;
-    console.log('  ✅ ConnectionState:', ConnectionState ? 'EXISTS' : 'MISSING');
-    console.log('  ✅ MessageStatus:', MessageStatus ? 'EXISTS' : 'MISSING');
+    console.log('  ✅ Types loaded');
     
-    console.log('\n✅ [STEP 1] All modules loaded successfully!\n');
+    console.log('\n✅ [STEP 1] All modules loaded!\n');
     
     return { chatService, AuthService, ConnectionState, MessageStatus };
     
   } catch (error) {
-    console.error('\n❌ [STEP 1] Module import failed!');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    
-    // Show error in UI
-    document.body.innerHTML = `
-      <div style="padding: 40px; background: #fee2e2; color: #991b1b; font-family: monospace; max-width: 800px; margin: 50px auto; border-radius: 8px;">
-        <h2>❌ Failed to Load Chat Application</h2>
-        <p><strong>Error:</strong> ${error.message}</p>
-        <details style="margin-top: 20px;">
-          <summary style="cursor: pointer;">Show Details</summary>
-          <pre style="margin-top: 10px; padding: 10px; background: white; overflow: auto;">${error.stack}</pre>
-        </details>
-        <p style="margin-top: 20px; font-size: 12px;">
-          Check the browser console (F12) for more information.
-        </p>
-      </div>
-    `;
-    
+    console.error('\n❌ [STEP 1] Import failed!', error);
     throw error;
   }
 }
@@ -68,7 +35,6 @@ async function loadModules() {
 // ==========================================
 // USER PROFILES
 // ==========================================
-
 const USER_PROFILES = [
   {
     id: '091e4c17-47ab-4150-8b45-ea36dd2c2de9',
@@ -95,12 +61,10 @@ const USER_PROFILES = [
 // ==========================================
 // CHAT APP CLASS
 // ==========================================
-
 class ChatApp {
   constructor(modules) {
-    console.log('\n🔄 [STEP 2] Initializing ChatApp class...');
+    console.log('\n🔄 [STEP 2] Initializing ChatApp...');
     
-    // Store modules
     this.chatService = modules.chatService;
     this.AuthService = modules.AuthService;
     this.ConnectionState = modules.ConnectionState;
@@ -108,7 +72,6 @@ class ChatApp {
     
     console.log('  ✅ Modules assigned to ChatApp');
     
-    // Initialize state
     this.currentUser = null;
     this.conversationId = null;
     this.messageHistory = [];
@@ -120,35 +83,25 @@ class ChatApp {
     console.log('  ✅ State initialized');
     console.log('  ✅ Job ID:', this.jobId);
     
-    // Start initialization
     this.init();
   }
 
   init() {
     console.log('\n🔄 [STEP 3] Starting UI initialization...');
-    try {
-      this.renderUserSelection();
-      console.log('  ✅ User selection rendered');
-      
-      this.attachRoleSelectionEvents();
-      console.log('  ✅ Events attached');
-      
-      console.log('\n✅ [STEP 3] ChatApp initialization complete!\n');
-      console.log('========================================');
-      console.log('🎉 APPLICATION READY - Select a user to continue');
-      console.log('========================================\n');
-    } catch (error) {
-      console.error('❌ [STEP 3] Initialization failed:', error);
-      throw error;
-    }
+    this.renderUserSelection();
+    console.log('  ✅ User selection rendered');
+    
+    this.attachRoleSelectionEvents();
+    console.log('  ✅ Events attached');
+    
+    console.log('\n✅ [STEP 3] ChatApp initialization complete!');
+    console.log('========================================');
+    console.log('🎉 APPLICATION READY - Select a user to continue');
+    console.log('========================================\n');
   }
 
   renderUserSelection() {
     const userList = document.getElementById('user-list');
-    if (!userList) {
-      throw new Error('Element #user-list not found in DOM');
-    }
-    
     userList.innerHTML = USER_PROFILES.map((user, index) => `
       <li>
         <label class="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
@@ -174,10 +127,6 @@ class ChatApp {
     const connectBtn = document.getElementById('connect-btn');
     const radioButtons = document.querySelectorAll('input[name="user"]');
 
-    if (!connectBtn) {
-      throw new Error('Element #connect-btn not found in DOM');
-    }
-
     radioButtons.forEach(radio => {
       radio.addEventListener('change', () => {
         connectBtn.disabled = false;
@@ -200,7 +149,6 @@ class ChatApp {
       console.log('🔐 [LOGIN] Starting authentication...');
       
       const connectBtn = document.getElementById('connect-btn');
-      const originalText = connectBtn.textContent;
       connectBtn.textContent = 'Logging in...';
       connectBtn.disabled = true;
 
@@ -231,7 +179,7 @@ class ChatApp {
       connectBtn.textContent = 'Connect to Chat';
       connectBtn.disabled = false;
       
-      alert('Login failed: ' + error.message + '\n\nPlease check your credentials.');
+      alert('Login failed: ' + error.message);
     }
   }
 
@@ -323,7 +271,6 @@ class ChatApp {
 
     this.chatService.onMessageSendError((data) => {
       console.error('❌ Send error:', data.error);
-      this.showError('Failed to send message');
     });
 
     this.chatService.onTyping((userId, isTyping) => {
@@ -347,10 +294,10 @@ class ChatApp {
 
     const requestUsers = () => {
       if (this.chatService.isConnected()) {
-        console.log('🔌 Socket connected, requesting online users...');
+        console.log('📡 Requesting online users...');
         this.chatService.getAllOnlineUsers();
       } else {
-        console.log('⏳ Waiting for socket connection...');
+        console.log('⏳ Waiting for connection...');
         setTimeout(requestUsers, 1000);
       }
     };
@@ -359,7 +306,7 @@ class ChatApp {
 
     setTimeout(() => {
       if (!initialDataReceived) {
-        console.log('⚠️ No online users data received, showing empty state');
+        console.log('⚠️ No users data after 10s');
         this.onlineUsers = [];
         this.renderOnlineUsers();
       }
@@ -418,14 +365,6 @@ class ChatApp {
           <div class="font-medium text-gray-800 truncate">${this.escapeHtml(user.name)}</div>
           <div class="text-xs text-gray-500 capitalize">${user.role || 'user'}</div>
         </div>
-        ${user.id !== this.currentUser.userData.id && user.id !== this.currentUser.id ? `
-          <button 
-            class="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-            onclick="window.chatApp.startChatWith('${user.id}', '${this.escapeHtml(user.name)}')"
-          >
-            Chat
-          </button>
-        ` : ''}
       </div>
     `).join('');
   }
@@ -448,13 +387,8 @@ class ChatApp {
     window.chatApp = this;
   }
 
-  async startChatWith(userId, userName) {
-    console.log(`💬 Starting chat with ${userName} (${userId})`);
-    alert(`Starting chat with ${userName} - Coming soon!`);
-  }
-
   async setupConversation() {
-    console.log('🔍 Setting up conversation...');
+    console.log('📋 Setting up conversation...');
     
     const conversation = await this.chatService.findOrCreateJobConversation(
       this.jobId,
@@ -462,7 +396,7 @@ class ChatApp {
     );
 
     this.conversationId = conversation.id;
-    console.log('✅ Conversation ready:', this.conversationId);
+    console.log('  ✅ Conversation ID:', this.conversationId);
 
     const result = await this.chatService.loadMessages(this.conversationId, {
       page: 1,
@@ -470,7 +404,7 @@ class ChatApp {
     });
 
     this.messageHistory = result.messages;
-    console.log(`📜 Loaded ${result.messages.length} messages`);
+    console.log(`  ✅ Loaded ${result.messages.length} messages`);
 
     result.messages.forEach(msg => this.renderMessage(msg, false));
 
@@ -546,7 +480,6 @@ class ChatApp {
 
     } catch (error) {
       console.error('❌ Failed to send:', error);
-      this.showError('Failed to send message');
       input.value = text;
     }
   }
@@ -636,10 +569,6 @@ class ChatApp {
     }
   }
 
-  showError(message) {
-    console.error(message);
-  }
-
   escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -648,33 +577,26 @@ class ChatApp {
 }
 
 // ==========================================
-// MAIN INITIALIZATION
+// MAIN START
 // ==========================================
-
 async function startApp() {
-  console.log('🚀 [MAIN] Starting application initialization...');
+  console.log('🚀 Starting app...');
   
   try {
-    // Load all modules
     const modules = await loadModules();
     
-    // Wait for DOM
     if (document.readyState === 'loading') {
-      console.log('⏳ [MAIN] Waiting for DOM...');
       await new Promise(resolve => {
         document.addEventListener('DOMContentLoaded', resolve);
       });
     }
     
-    console.log('✅ [MAIN] DOM ready');
-    
-    // Create app instance
     new ChatApp(modules);
     
   } catch (error) {
-    console.error('❌ [MAIN] Fatal error:', error);
+    console.error('❌ Fatal error:', error);
+    alert('Failed to start: ' + error.message);
   }
 }
 
-// Start the app
 startApp();
