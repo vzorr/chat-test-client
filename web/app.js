@@ -213,23 +213,54 @@ class ChatApp {
   // ONLINE USERS PANEL - NEW
   // ==========================================
 
+
   setupOnlineUsersPanel() {
+    // Show loading initially
+    this.renderOnlineUsersLoading();
+    
+    // Track if we've received initial data
+    let initialDataReceived = false;
+    
     // Subscribe to online users updates
     chatService.onOnlineUsersChange((users) => {
       console.log('👥 Online users updated:', users.length);
+      initialDataReceived = true;
       this.onlineUsers = users;
       this.renderOnlineUsers();
     });
 
-    // Request initial list
-    chatService.getAllOnlineUsers();
+    // Wait for socket connection before requesting users
+    const requestUsers = () => {
+      if (chatService.isConnected()) {
+        console.log('🔌 Socket connected, requesting online users...');
+        chatService.getAllOnlineUsers();
+      } else {
+        console.log('⏳ Waiting for socket connection...');
+        setTimeout(requestUsers, 1000); // Retry after 1 second
+      }
+    };
+
+    // Request initial list after a short delay to ensure connection
+    setTimeout(requestUsers, 2000);
+
+    // Timeout fallback: if no data after 10 seconds, show empty state
+    setTimeout(() => {
+      if (!initialDataReceived) {
+        console.log('⚠️ No online users data received, showing empty state');
+        this.onlineUsers = [];
+        this.renderOnlineUsers();
+      }
+    }, 10000);
 
     // Auto-refresh every 30 seconds as fallback
     setInterval(() => {
-      chatService.getAllOnlineUsers();
+      if (chatService.isConnected()) {
+        chatService.getAllOnlineUsers();
+      }
     }, 30000);
   }
 
+  
   renderOnlineUsers() {
     const container = document.getElementById('online-users-list');
     const countBadge = document.getElementById('online-count');

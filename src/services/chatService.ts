@@ -543,12 +543,35 @@ class ChatService {
 
   async blockUser(userId: string): Promise<void> {
     this.checkInitialized();
-    return this.userService.blockUser(userId);
+    try {
+      return await this.userService.blockUser(userId);
+    } catch (error) {
+      console.warn('Block user feature not available:', error);
+      throw error;
+    }
   }
 
   async isUserBlocked(userId: string): Promise<boolean> {
     this.checkInitialized();
-    return this.userService.isUserBlocked(userId);
+    try {
+      return await this.userService.isUserBlocked(userId);
+    } catch (error) {
+      console.warn('Blocked users check not available:', error);
+      return false; // Default to not blocked if feature unavailable
+    }
+  }
+
+  /**
+   * Get list of blocked users (optional feature)
+   */
+  async getBlockedUsers(): Promise<string[]> {
+    this.checkInitialized();
+    try {
+      return await this.userService.getBlockedUsers?.() || [];
+    } catch (error) {
+      console.warn('Get blocked users not available:', error);
+      return [];
+    }
   }
 
   // ==========================================
@@ -584,16 +607,30 @@ class ChatService {
    * Get all online users from server (fire and forget)
    */
   getAllOnlineUsers(): void {
-    this.checkInitialized();
-    this.realtimeService.getAllOnlineUsers();
+    if (!this.isInitialized) {
+      console.warn('⚠️ Cannot get online users - service not initialized');
+      return;
+    }
+    try {
+      this.realtimeService.getAllOnlineUsers();
+    } catch (error) {
+      console.warn('⚠️ Failed to request online users:', error);
+    }
   }
 
   /**
    * Get online users from local cache (synchronous)
    */
   getOnlineUsers(): OnlineUser[] {
-    this.checkInitialized();
-    return this.realtimeService.getOnlineUsersSync();
+    if (!this.isInitialized) {
+      return [];
+    }
+    try {
+      return this.realtimeService.getOnlineUsersSync();
+    } catch (error) {
+      console.warn('⚠️ Failed to get online users from cache:', error);
+      return [];
+    }
   }
 
   /**

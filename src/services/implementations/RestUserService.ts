@@ -21,7 +21,7 @@ export class RestUserService implements IUserService {
     private userId: string = '',
     private storageService?: IStorageService
   ) {
-    this.loadBlockedUsers();
+    //this.loadBlockedUsers();
   }
 
   /**
