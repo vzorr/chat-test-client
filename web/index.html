@@ -29,6 +29,22 @@
     }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a0aec0;
+    }
   </style>
 </head>
 <body class="h-screen overflow-hidden bg-gray-100">
@@ -68,36 +84,74 @@
       </div>
     </div>
 
-    <!-- Messages Container -->
-    <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="messages-container">
-      <!-- Messages populated by app.js -->
-    </div>
+    <!-- Main Container with 2-panel layout -->
+    <div class="flex-1 flex overflow-hidden">
+      
+      <!-- Conversation List Panel -->
+      <div class="w-96 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-800 mb-3">Conversations</h2>
+          
+          <!-- Search -->
+          <div class="relative">
+            <input 
+              type="text" 
+              id="conversation-search"
+              placeholder="Search conversations..." 
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+            <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
 
-    <!-- Typing Indicator -->
-    <div id="typing-indicator" class="hidden px-6 pb-2">
-      <div class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-xl shadow-sm">
-        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
-        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
-        <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+        <!-- Conversation List -->
+        <div id="conversation-list" class="flex-1 overflow-y-auto">
+          <!-- Populated by app.js -->
+        </div>
       </div>
-    </div>
 
-    <!-- Input Container -->
-    <div class="bg-white border-t border-gray-200 px-6 py-4 flex gap-3">
-      <input 
-        type="text" 
-        id="message-input" 
-        placeholder="Type a message..."
-        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-      />
-      <button 
-        id="send-btn" 
-        class="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
-      >
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
-        </svg>
-      </button>
+      <!-- Active Chat Panel -->
+      <div class="flex-1 flex flex-col">
+        <!-- Messages Container -->
+        <div class="flex-1 overflow-y-auto p-6 bg-gray-50" id="messages-container">
+          <div class="text-center text-gray-500 py-8">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p class="text-sm">Select a conversation to start chatting</p>
+          </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" class="hidden px-6 pb-2">
+          <div class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-xl shadow-sm">
+            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+            <span class="typing-dot w-2 h-2 rounded-full bg-gray-400"></span>
+          </div>
+        </div>
+
+        <!-- Input Container -->
+        <div class="bg-white border-t border-gray-200 px-6 py-4 flex gap-3">
+          <input 
+            type="text" 
+            id="message-input" 
+            placeholder="Type a message..."
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          <button 
+            id="send-btn" 
+            class="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
