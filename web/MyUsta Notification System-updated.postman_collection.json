@@ -1,0 +1,1258 @@
+{
+	"info": {
+		"_postman_id": "f04b219f-1ee0-4e10-a76e-3bc70d19acc6",
+		"name": "MyUsta Notification System - Complete",
+		"description": "Complete collection for testing notification system with all endpoints including unread-count",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "43662380"
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"item": [
+				{
+					"name": "Login Customer (Amir Sohail)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.token).to.exist;",
+									"    ",
+									"    pm.collectionVariables.set('customerToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('authToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('customerId', jsonData.data.user.id);",
+									"    ",
+									"    console.log('✅ Customer (Amir Sohail) logged in successfully');",
+									"    console.log('Token:', jsonData.data.token.substring(0, 20) + '...');",
+									"    console.log('User ID:', jsonData.data.user.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emailOrPhone\": \"amirsohail681@gmail.com\",\n  \"password\": \"Password123@\",\n  \"role\": \"customer\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login Usta (Babar Khan)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.token).to.exist;",
+									"    ",
+									"    pm.collectionVariables.set('ustaToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('authToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('ustaId', jsonData.data.user.id);",
+									"    ",
+									"    console.log('✅ Usta (Babar Khan) logged in successfully');",
+									"    console.log('Token:', jsonData.data.token.substring(0, 20) + '...');",
+									"    console.log('User ID:', jsonData.data.user.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emailOrPhone\": \"babarkh0302@gmail.com\",\n  \"password\": \"Password123@\",\n  \"role\": \"usta\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Switch to Customer Token",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));",
+									"console.log('🔄 Switched to Customer (Amir Sohail) token');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/test",
+							"host": ["{{baseUrl}}"],
+							"path": ["test"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Switch to Usta Token",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));",
+									"console.log('🔄 Switched to Usta (Babar Khan) token');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/test",
+							"host": ["{{baseUrl}}"],
+							"path": ["test"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📱 Customer Notifications",
+			"item": [
+				{
+					"name": "Get Customer Notifications - All",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));",
+									"console.log('🔑 Using Customer token');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get notifications successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.exist;",
+									"    ",
+									"    if (jsonData.data.notifications && jsonData.data.notifications.length > 0) {",
+									"        pm.collectionVariables.set('notificationId', jsonData.data.notifications[0].id);",
+									"        console.log('📬 Found', jsonData.data.notifications.length, 'notifications');",
+									"        console.log('🆔 First notification ID:', jsonData.data.notifications[0].id);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?page=1&limit=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Notifications - Unread Only",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get unread notifications successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    console.log('📭 Unread notifications:', jsonData.data.notifications?.length || 0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?status=unread&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "status",
+									"value": "unread"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Notifications - By Category",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?category=contracts&limit=15",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "category",
+									"value": "contracts",
+									"description": "Options: activity, contracts, reminders, chat"
+								},
+								{
+									"key": "limit",
+									"value": "15"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Notification Stats",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get stats successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.total).to.exist;",
+									"    pm.expect(jsonData.data.unreadCount).to.exist;",
+									"    ",
+									"    console.log('📊 Total notifications:', jsonData.data.total);",
+									"    console.log('🔔 Unread count:', jsonData.data.unreadCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Unread Count (NEW)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get unread count successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.unreadCount).to.exist;",
+									"    pm.expect(jsonData.data.total).to.exist;",
+									"    ",
+									"    console.log('🔢 Unread count:', jsonData.data.unreadCount);",
+									"    console.log('📊 Total count:', jsonData.data.total);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "unread-count"]
+						},
+						"description": "Lightweight endpoint to get just unread count and total"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Specific Notification",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get notification successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    console.log('📄 Notification details retrieved');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "{{notificationId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Customer Notification as Read",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Mark as read successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    console.log('✅ Notification marked as read');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "{{notificationId}}", "read"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Customer Notifications as Read",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Mark all as read successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    console.log('✅ All notifications marked as read');",
+									"    console.log('📊 Marked count:', jsonData.data?.markedCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"category\": \"activity\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/notifications/mark-all-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "mark-all-read"]
+						},
+						"description": "Mark all notifications as read. Optional: filter by category"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Customer Notifications as Read (No Filter)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/notifications/mark-all-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "mark-all-read"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔧 Usta Notifications",
+			"item": [
+				{
+					"name": "Get Usta Notifications - All",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));",
+									"console.log('🔑 Using Usta token');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get notifications successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    ",
+									"    if (jsonData.data.notifications && jsonData.data.notifications.length > 0) {",
+									"        pm.collectionVariables.set('notificationId', jsonData.data.notifications[0].id);",
+									"        console.log('📬 Found', jsonData.data.notifications.length, 'notifications');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?page=1&limit=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usta Notifications - Unread Only",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?status=unread",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "status",
+									"value": "unread"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usta Notifications - Activity Category",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?category=activity&status=unread",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "category",
+									"value": "activity"
+								},
+								{
+									"key": "status",
+									"value": "unread"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usta Notification Stats",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get stats successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    ",
+									"    console.log('📊 Total notifications:', jsonData.data.total);",
+									"    console.log('🔔 Unread count:', jsonData.data.unreadCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usta Unread Count (NEW)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Get unread count successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.unreadCount).to.exist;",
+									"    pm.expect(jsonData.data.total).to.exist;",
+									"    ",
+									"    console.log('🔢 Unread count:', jsonData.data.unreadCount);",
+									"    console.log('📊 Total count:', jsonData.data.total);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "unread-count"]
+						},
+						"description": "Lightweight endpoint to get just unread count and total"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usta Specific Notification",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "{{notificationId}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Usta Notification as Read",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "{{notificationId}}", "read"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Usta Notifications as Read",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/notifications/mark-all-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "mark-all-read"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔄 Complete Flow Tests",
+			"item": [
+				{
+					"name": "1. Login Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Customer login successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('customerToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('authToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('customerId', jsonData.data.user.id);",
+									"    console.log('✅ Step 1: Customer logged in');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emailOrPhone\": \"amirsohail681@gmail.com\",\n  \"password\": \"Password123@\",\n  \"role\": \"customer\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Customer Unread Count",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Got unread count', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log('✅ Step 2: Unread count -', jsonData.data.unreadCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "unread-count"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. Get Customer Notifications",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Got notifications', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data.notifications && jsonData.data.notifications.length > 0) {",
+									"        pm.collectionVariables.set('notificationId', jsonData.data.notifications[0].id);",
+									"        console.log('✅ Step 3: Got', jsonData.data.notifications.length, 'notifications');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?limit=5",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. Mark One Notification as Read",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Marked as read', function () {",
+									"    pm.response.to.have.status(200);",
+									"    console.log('✅ Step 4: Notification marked as read');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "{{notificationId}}", "read"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5. Get Updated Unread Count",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('customerToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Got updated count', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log('✅ Step 5: Updated unread count -', jsonData.data.unreadCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "unread-count"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "6. Login Usta",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Usta login successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('ustaToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('authToken', jsonData.data.token);",
+									"    pm.collectionVariables.set('ustaId', jsonData.data.user.id);",
+									"    console.log('✅ Step 6: Usta logged in');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emailOrPhone\": \"babarkh0302@gmail.com\",\n  \"password\": \"Password123@\",\n  \"role\": \"usta\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "7. Get Usta Notifications",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Got Usta notifications', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log('✅ Step 7: Usta has', jsonData.data.notifications?.length || 0, 'notifications');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications?limit=5",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8. Get Usta Unread Count",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.collectionVariables.set('authToken', pm.collectionVariables.get('ustaToken'));"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Got Usta unread count', function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log('✅ Step 8: Usta unread count -', jsonData.data.unreadCount);",
+									"    console.log('🎉 Complete flow test finished successfully!');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["notifications", "unread-count"]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Complete end-to-end flow testing both customer and usta notification flows"
+		},
+		{
+			"name": "🧪 System Health",
+			"item": [
+				{
+					"name": "API Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/test",
+							"host": ["{{baseUrl}}"],
+							"path": ["test"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Notification Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://127.0.0.1:5000/health",
+							"protocol": "http",
+							"host": ["127", "0", "0", "1"],
+							"port": "5000",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{authToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api",
+			"type": "string"
+		},
+		{
+			"key": "customerToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "ustaToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customerId",
+			"value": "customer-001",
+			"type": "string"
+		},
+		{
+			"key": "ustaId",
+			"value": "091e4c17-47ab-4150-8b45-ea36dd2c2de9",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "notificationId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

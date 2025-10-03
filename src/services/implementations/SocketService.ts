@@ -360,6 +360,18 @@ class SocketService implements IRealtimeService {
   private async createConnection(userId: string, token: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+
+           console.log('🔌 [SOCKET] Connection details:');
+      console.log('  → Server URL:', this.serverUrl);
+      console.log('  → Socket Path:', SocketConfig.path);
+      console.log('  → Full endpoint:', `${this.serverUrl}${SocketConfig.path}`);
+      console.log('  → User ID:', userId);
+      console.log('  → Has token:', !!token);
+      console.log('  → Token (first 20 chars):', token.substring(0, 20));
+      console.log('  → Transports:', SocketConfig.transports);
+      console.log('  → Timeout:', SocketConfig.timeout);
+      
+      
         AppLogger.info("Connecting to socket server", {
           serverUrl: this.serverUrl,
           userId,
@@ -592,7 +604,7 @@ private setupOnlineUsersHandlers(): void {
     AppLogger.debug(`User ${userId} went offline`);
     this.notifyOnlineUsersUpdate();
   });
-  
+
   
   AppLogger.info('✅ Online users handlers setup complete');
 }

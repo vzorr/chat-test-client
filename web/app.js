@@ -185,107 +185,111 @@ class ChatApp {
     }
   }
 
+  
   async connectToChat() {
-    // PREVENT DOUBLE INITIALIZATION
-    if (this.isInitializing) {
-      console.log('⚠️ [CONNECT] Already initializing, skipping...');
-      return;
-    }
+  // PREVENT DOUBLE INITIALIZATION
+  if (this.isInitializing) {
+    console.log('⚠️ [CONNECT] Already initializing, skipping...');
+    return;
+  }
 
-    this.isInitializing = true;
+  this.isInitializing = true;
+
+  try {
+    console.log('\n🔌 [CONNECT] Establishing chat connection...');
+    console.log('  → Current user:', this.currentUser.name);
+    console.log('  → User ID:', this.currentUser.userData.id || this.currentUser.id);
+    console.log('  → Role:', this.currentUser.role);
+    console.log('  → Has token:', !!this.currentUser.token);
+    
+    // Update UI
+    document.getElementById('role-selection').classList.add('hidden');
+    document.getElementById('chat-interface').classList.remove('hidden');
+
+    document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
+    document.getElementById('user-name').textContent = this.currentUser.name;
+    document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
+    this.updateConnectionStatus('connecting', 'Connecting...');
+
+    console.log('\n🔍 [CONNECT] About to call chatService.initialize()');
+    console.log('  → chatService exists:', !!this.chatService);
+    console.log('  → chatService.initialize exists:', typeof this.chatService.initialize);
 
     try {
-      console.log('\n🔌 [CONNECT] Establishing chat connection...');
-      console.log('  → Current user:', this.currentUser.name);
-      console.log('  → User ID:', this.currentUser.userData.id || this.currentUser.id);
-      console.log('  → Role:', this.currentUser.role);
-      console.log('  → Has token:', !!this.currentUser.token);
+      console.log('  → Calling chatService.initialize...');
       
-      // Update UI
-      document.getElementById('role-selection').classList.add('hidden');
-      document.getElementById('chat-interface').classList.remove('hidden');
+      await this.chatService.initialize(
+        this.currentUser.userData.id || this.currentUser.id,
+        this.currentUser.role,
+        this.currentUser.token,
+        undefined, // No Redux store
+        {
+          id: this.currentUser.userData.id || this.currentUser.id,
+          externalId: this.currentUser.userData.id || this.currentUser.id,
+          name: this.currentUser.name,
+          email: this.currentUser.email,
+          phone: this.currentUser.phone,
+          role: this.currentUser.role
+        }
+      );
 
-      document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
-      document.getElementById('user-name').textContent = this.currentUser.name;
-      document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
-      this.updateConnectionStatus('connecting', 'Connecting...');
+      console.log('  ✅ chatService.initialize() completed');
 
-      // CRITICAL: Add detailed logging BEFORE chatService.initialize
-      console.log('\n🔍 [CONNECT] About to call chatService.initialize()');
-      console.log('  → chatService exists:', !!this.chatService);
-      console.log('  → chatService.initialize exists:', typeof this.chatService.initialize);
-
-      // WRAP IN TRY-CATCH TO CATCH ANY ERROR
-      try {
-        console.log('  → Calling chatService.initialize...');
-        
-        await this.chatService.initialize(
-          this.currentUser.userData.id || this.currentUser.id,
-          this.currentUser.role,
-          this.currentUser.token,
-          undefined, // No Redux store
-          {
-            id: this.currentUser.userData.id || this.currentUser.id,
-            externalId: this.currentUser.userData.id || this.currentUser.id,
-            name: this.currentUser.name,
-            email: this.currentUser.email,
-            phone: this.currentUser.phone,
-            role: this.currentUser.role
-          }
-        );
-
-        console.log('  ✅ chatService.initialize() completed');
-
-      } catch (initError) {
-        console.error('  ❌ chatService.initialize() threw error:', initError);
-        console.error('  → Error name:', initError.name);
-        console.error('  → Error message:', initError.message);
-        console.error('  → Error stack:', initError.stack);
-        throw initError; // Re-throw to outer catch
-      }
-
-      console.log('  ✅ chatService initialized');
-
-      // Continue with setup
-      this.setupEventListeners();
-      console.log('  ✅ Event listeners attached');
-      
-      this.setupOnlineUsersPanel();
-      console.log('  ✅ Online users panel setup');
-      
-      await this.setupConversation();
-      console.log('  ✅ Conversation setup complete');
-      
-      this.attachInputEvents();
-      console.log('  ✅ Input events attached');
-      
-      this.attachOnlineUsersPanelEvents();
-      console.log('  ✅ Panel events attached');
-
-      this.updateConnectionStatus('connected', 'Connected');
-      console.log('\n✅ [CONNECT] Chat connected successfully!\n');
-
-    } catch (error) {
-      console.error('❌ [CONNECT] Connection failed:', error);
-      console.error('Full error stack:', error.stack);
-      
-      this.updateConnectionStatus('error', 'Connection Error');
-      
-      // Show detailed error to user
-      const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
-      alert(errorMsg);
-      
-      // Reset UI
-      document.getElementById('chat-interface').classList.add('hidden');
-      document.getElementById('role-selection').classList.remove('hidden');
-      
-      const connectBtn = document.getElementById('connect-btn');
-      connectBtn.textContent = 'Connect to Chat';
-      connectBtn.disabled = false;
-    } finally {
-      this.isInitializing = false;
+    } catch (initError) {
+      console.error('  ❌ chatService.initialize() threw error:', initError);
+      console.error('  → Error name:', initError.name);
+      console.error('  → Error message:', initError.message);
+      console.error('  → Error stack:', initError.stack);
+      throw initError;
     }
+
+    console.log('  ✅ chatService initialized');
+
+    // Setup event listeners
+    this.setupEventListeners();
+    console.log('  ✅ Event listeners attached');
+    
+    // Setup online users panel
+    this.setupOnlineUsersPanel();
+    console.log('  ✅ Online users panel setup');
+    
+    // CHANGED: Don't auto-setup conversation
+    await this.setupConversation(); // Just shows empty state now
+    console.log('  ✅ Ready for user selection');
+    
+    // Attach input events
+    this.attachInputEvents();
+    console.log('  ✅ Input events attached');
+    
+    // Attach panel events
+    this.attachOnlineUsersPanelEvents();
+    console.log('  ✅ Panel events attached');
+
+    this.updateConnectionStatus('connected', 'Connected');
+    console.log('\n✅ [CONNECT] Chat connected successfully!\n');
+
+  } catch (error) {
+    console.error('❌ [CONNECT] Connection failed:', error);
+    console.error('Full error stack:', error.stack);
+    
+    this.updateConnectionStatus('error', 'Connection Error');
+    
+    // Show detailed error to user
+    const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
+    alert(errorMsg);
+    
+    // Reset UI
+    document.getElementById('chat-interface').classList.add('hidden');
+    document.getElementById('role-selection').classList.remove('hidden');
+    
+    const connectBtn = document.getElementById('connect-btn');
+    connectBtn.textContent = 'Connect to Chat';
+    connectBtn.disabled = false;
+  } finally {
+    this.isInitializing = false;
   }
+}
+
 
   setupEventListeners() {
     this.chatService.onConnectionStateChange((state) => {
@@ -408,44 +412,65 @@ class ChatApp {
   }
 
   renderOnlineUsers() {
-    const container = document.getElementById('online-users-list');
-    const countBadge = document.getElementById('online-count');
+  const container = document.getElementById('online-users-list');
+  const countBadge = document.getElementById('online-count');
+  
+  // Filter out current user
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  const otherUsers = this.onlineUsers.filter(user => user.id !== currentUserId);
+  
+  // Apply search filter
+  const filtered = this.searchTerm
+    ? otherUsers.filter(user => 
+        user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
+      )
+    : otherUsers;
+
+  countBadge.textContent = otherUsers.length;
+
+  if (filtered.length === 0) {
+    const emptyMessage = this.searchTerm 
+      ? 'No users found' 
+      : 'No other users online';
     
-    const filtered = this.searchTerm
-      ? this.onlineUsers.filter(user => 
-          user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
-        )
-      : this.onlineUsers;
+    container.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <p>${emptyMessage}</p>
+      </div>
+    `;
+    return;
+  }
 
-    countBadge.textContent = this.onlineUsers.length;
-
-    if (filtered.length === 0) {
-      container.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <p>${this.searchTerm ? 'No users found' : 'No users online'}</p>
+  container.innerHTML = filtered.map(user => `
+    <div 
+      class="flex items-center gap-3 p-3 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer group border-l-4 border-transparent hover:border-indigo-500"
+      onclick="window.chatApp.startConversationWithUser(${this.escapeHtml(JSON.stringify(user))})"
+    >
+      <div class="relative">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold shadow-lg">
+          ${user.name.charAt(0).toUpperCase()}
         </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = filtered.map(user => `
-      <div class="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer group">
-        <div class="relative">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-            ${user.name.charAt(0).toUpperCase()}
-          </div>
-          <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+        <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-gray-800 truncate group-hover:text-indigo-600">
+          ${this.escapeHtml(user.name)}
         </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium text-gray-800 truncate">${this.escapeHtml(user.name)}</div>
-          <div class="text-xs text-gray-500 capitalize">${user.role || 'user'}</div>
+        <div class="text-xs text-gray-500 capitalize flex items-center gap-1">
+          <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+          ${user.role || 'user'}
         </div>
       </div>
-    `).join('');
-  }
+      <svg class="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    </div>
+  `).join('');
+}
+
 
   attachOnlineUsersPanelEvents() {
     const toggleBtn = document.getElementById('toggle-panel');
@@ -465,17 +490,56 @@ class ChatApp {
     window.chatApp = this;
   }
 
+
   async setupConversation() {
-    console.log('📋 Setting up conversation...');
+  console.log('📋 Skipping automatic conversation setup');
+  console.log('💬 User will select who to chat with from online users');
+  
+  // Show empty state in messages
+  const container = document.getElementById('messages-container');
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <svg class="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <p class="text-lg font-medium mb-2">Select a user to start chatting</p>
+        <p class="text-sm">Click on a user from the online users panel</p>
+      </div>
     
+      </div>
+  `;
+}
+
+async startConversationWithUser(user) {
+  console.log('💬 Starting conversation with:', user.name);
+  
+  // Update UI to show we're setting up
+  const container = document.getElementById('messages-container');
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <div class="animate-spin w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-4"></div>
+        <p class="text-lg font-medium">Setting up conversation with ${user.name}...</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    // Update receiver info
+    this.currentUser.receiverId = user.id;
+    this.currentUser.receiverName = user.name;
+    
+    // Find or create conversation
     const conversation = await this.chatService.findOrCreateJobConversation(
       this.jobId,
-      this.currentUser.receiverId
+      user.id
     );
 
     this.conversationId = conversation.id;
     console.log('  ✅ Conversation ID:', this.conversationId);
 
+    // Load messages
     const result = await this.chatService.loadMessages(this.conversationId, {
       page: 1,
       limit: 50
@@ -484,18 +548,46 @@ class ChatApp {
     this.messageHistory = result.messages;
     console.log(`  ✅ Loaded ${result.messages.length} messages`);
 
+    // Clear container before rendering messages
+    container.innerHTML = '';
+    
+    // Render existing messages
     result.messages.forEach(msg => this.renderMessage(msg, false));
 
+    // Send greeting if new conversation
     if (result.messages.length === 0) {
       setTimeout(() => {
         this.chatService.sendTextMessage(
           this.conversationId,
-          `Hello! I'm ${this.currentUser.name}. How can I help you today?`,
-          this.currentUser.receiverId
+          `Hello ${user.name}! I'm ${this.currentUser.name}.`,
+          user.id
         );
-      }, 1000);
+      }, 500);
     }
+    
+    console.log('✅ Conversation ready');
+    
+  } catch (error) {
+    console.error('❌ Failed to setup conversation:', error);
+    
+    // Show error
+    container.innerHTML = `
+      <div class="flex items-center justify-center h-full">
+        <div class="text-center text-red-500">
+          <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-lg font-medium mb-2">Failed to setup conversation</p>
+          <p class="text-sm">${error.message}</p>
+          <button onclick="window.chatApp.startConversationWithUser(${JSON.stringify(user)})" class="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">
+            Try Again
+          </button>
+        </div>
+      </div>
+    `;
   }
+}
+
 
   attachInputEvents() {
     const input = document.getElementById('message-input');

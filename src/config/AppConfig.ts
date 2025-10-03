@@ -158,7 +158,13 @@ const SHARED_CONFIG = {
   socket: {
     url: BASE_URLS.socket,
     path: BASE_URLS.socketPath,
-    transports: (getEnvVar('SOCKET_TRANSPORTS')?.split(',') || ['websocket', 'polling']) as ('polling' | 'websocket')[],
+    transports: (() => {
+                        const envTransports = getEnvVar('SOCKET_TRANSPORTS');
+                        if (envTransports && envTransports.trim()) {
+                          return envTransports.split(',').map(t => t.trim()) as ('polling' | 'websocket')[];
+                        }
+                        return ['websocket', 'polling'] as ('polling' | 'websocket')[];
+    })(),
     timeout: parseInt(getEnvVar('SOCKET_TIMEOUT', '30000'), 10),
     reconnection: getEnvVar('SOCKET_RECONNECTION', 'true') !== 'false',
     reconnectionAttempts: parseInt(getEnvVar('SOCKET_RECONNECTION_ATTEMPTS', '5'), 10),
