@@ -518,6 +518,9 @@ async connectToChat() {
     this.attachOnlineUsersPanelEvents();
     console.log('  ✓ Panel events attached');
 
+    this.setupResponsivePanels();
+    console.log('  ✓ Responsive panels setup');
+
     // ✅ LOAD ALL CONVERSATIONS AFTER CONNECTION
     await this.loadAllConversations();
 
@@ -2019,6 +2022,145 @@ async startConversationWithUser(user) {
     });
   }
 
+setupResponsivePanels() {
+  console.log('[RESPONSIVE] Setting up icon sidebar panels...');
+  
+  const usersPanel = document.getElementById('users-panel');
+  const conversationsPanel = document.getElementById('conversations-panel');
+  const backdrop = document.getElementById('mobile-backdrop');
+  
+  const toggleUsersBtn = document.getElementById('toggle-users-panel');
+  const toggleUsersBtnIcon = document.getElementById('toggle-users-panel-icon');
+  
+  const toggleConversationsBtn = document.getElementById('toggle-conversations-panel');
+  const toggleConversationsBtnIcon = document.getElementById('toggle-conversations-panel-icon');
+  
+  const isMobile = () => window.innerWidth < 1024;
+  
+  // Sync collapsed badge counts with expanded counts
+  const syncBadges = () => {
+    const onlineCount = document.getElementById('online-count')?.textContent;
+    const onlineCountCollapsed = document.getElementById('online-count-collapsed');
+    if (onlineCountCollapsed && onlineCount) {
+      onlineCountCollapsed.textContent = onlineCount;
+    }
+    
+    const totalUnread = document.getElementById('total-unread-badge')?.textContent;
+    const totalUnreadCollapsed = document.getElementById('total-unread-badge-collapsed');
+    const totalUnreadBadge = document.getElementById('total-unread-badge');
+    if (totalUnreadCollapsed && totalUnread && totalUnreadBadge) {
+      totalUnreadCollapsed.textContent = totalUnread;
+      if (!totalUnreadBadge.classList.contains('hidden')) {
+        totalUnreadCollapsed.classList.remove('hidden');
+      } else {
+        totalUnreadCollapsed.classList.add('hidden');
+      }
+    }
+    
+    const userAvatar = document.getElementById('user-avatar')?.textContent;
+    const userAvatarCollapsed = document.getElementById('user-avatar-collapsed');
+    if (userAvatarCollapsed && userAvatar) {
+      userAvatarCollapsed.textContent = userAvatar;
+    }
+  };
+  
+  // Sync badges periodically
+  setInterval(syncBadges, 1000);
+  
+  // Toggle users panel (header button) - NO ICON CHANGE
+  if (toggleUsersBtn) {
+    toggleUsersBtn.addEventListener('click', () => {
+      usersPanel.classList.toggle('panel-collapsed');
+      console.log('[RESPONSIVE] Users panel toggled');
+    });
+  }
+  
+  // Toggle users panel (icon button) - NO ICON CHANGE
+  if (toggleUsersBtnIcon) {
+    toggleUsersBtnIcon.addEventListener('click', () => {
+      usersPanel.classList.toggle('panel-collapsed');
+      console.log('[RESPONSIVE] Users panel toggled from icon');
+    });
+  }
+  
+  // Toggle conversations panel (header button) - NO ICON CHANGE
+  if (toggleConversationsBtn) {
+    toggleConversationsBtn.addEventListener('click', () => {
+      conversationsPanel.classList.toggle('panel-collapsed');
+      console.log('[RESPONSIVE] Conversations panel toggled');
+    });
+  }
+  
+  // Toggle conversations panel (icon button) - NO ICON CHANGE
+  if (toggleConversationsBtnIcon) {
+    toggleConversationsBtnIcon.addEventListener('click', () => {
+      conversationsPanel.classList.toggle('panel-collapsed');
+      console.log('[RESPONSIVE] Conversations panel toggled from icon');
+    });
+  }
+  
+  // Mobile handlers
+  const showUsersBtn = document.getElementById('show-users-panel-mobile');
+  const showUsersBtnIcon = document.getElementById('show-users-panel-mobile-icon');
+  const closeUsersBtn = document.getElementById('close-users-panel-mobile');
+  
+  const showConversationsBtn = document.getElementById('show-conversations-panel-mobile');
+  const closeConversationsBtn = document.getElementById('close-conversations-panel-mobile');
+  
+  if (showUsersBtn) {
+    showUsersBtn.addEventListener('click', () => {
+      usersPanel.classList.add('panel-mobile');
+      usersPanel.classList.remove('panel-collapsed');
+      conversationsPanel.classList.add('users-hidden');
+      backdrop.classList.remove('hidden');
+    });
+  }
+  
+  if (showUsersBtnIcon) {
+    showUsersBtnIcon.addEventListener('click', () => {
+      usersPanel.classList.add('panel-mobile');
+      usersPanel.classList.remove('panel-collapsed');
+      conversationsPanel.classList.add('users-hidden');
+      backdrop.classList.remove('hidden');
+    });
+  }
+  
+  if (showConversationsBtn) {
+    showConversationsBtn.addEventListener('click', () => {
+      conversationsPanel.classList.add('panel-mobile', 'conversations-panel-mobile');
+      conversationsPanel.classList.remove('panel-collapsed');
+      backdrop.classList.remove('hidden');
+    });
+  }
+  
+  if (closeUsersBtn) {
+    closeUsersBtn.addEventListener('click', () => {
+      usersPanel.classList.add('panel-collapsed');
+      conversationsPanel.classList.remove('users-hidden');
+      backdrop.classList.add('hidden');
+    });
+  }
+  
+  if (closeConversationsBtn) {
+    closeConversationsBtn.addEventListener('click', () => {
+      conversationsPanel.classList.add('panel-collapsed');
+      backdrop.classList.add('hidden');
+    });
+  }
+  
+  if (backdrop) {
+    backdrop.addEventListener('click', () => {
+      if (isMobile()) {
+        usersPanel.classList.add('panel-collapsed');
+        conversationsPanel.classList.add('panel-collapsed');
+        conversationsPanel.classList.remove('users-hidden');
+        backdrop.classList.add('hidden');
+      }
+    });
+  }
+  
+  console.log('[RESPONSIVE] Icon sidebar panels setup complete ✓');
+}
   async handleSend() {
     const input = document.getElementById('message-input');
     const text = input.value.trim();
