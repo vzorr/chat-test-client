@@ -132,14 +132,21 @@ class ConversationStateManager {
     return null;
   }
 
-  getSortedConversations() {
-    const conversations = this.getAllConversations();
-    return conversations.sort((a, b) => {
-      const timeA = new Date(a.lastActivity || a.updatedAt).getTime();
-      const timeB = new Date(b.lastActivity || b.updatedAt).getTime();
-      return timeB - timeA;
-    });
-  }
+getSortedConversations() {
+  return [...this.conversations.values()].sort((a, b) => {
+    // Get timestamps for comparison
+    const timeA = a.lastMessage?.timestamp || a.lastMessage?.createdAt || a.updatedAt || a.createdAt || 0;
+    const timeB = b.lastMessage?.timestamp || b.lastMessage?.createdAt || b.updatedAt || b.createdAt || 0;
+    
+    // Convert to timestamps if they're date strings
+    const timestampA = new Date(timeA).getTime();
+    const timestampB = new Date(timeB).getTime();
+    
+    // Sort in descending order (most recent first)
+    return timestampB - timestampA;
+  });
+}
+
 
   addMessage(conversationId, message) {
     if (!this.messagesByConversation.has(conversationId)) {
@@ -333,7 +340,7 @@ class ChatApp {
     console.log('  State manager initialized');
     
     this.currentUser = null;
-    this.jobId = `job-${Date.now()}`;
+    this.jobId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
     this.jobTitle = 'Service Request';
     this.searchTerm = '';
     this.conversationSearchTerm = '';
@@ -447,103 +454,256 @@ class ChatApp {
     }
   }
 
-  async connectToChat() {
-    if (this.isInitializing) {
-      console.log('[CONNECT] Already initializing, skipping...');
-      return;
-    }
 
-    this.isInitializing = true;
+async connectToChat() {
+  if (this.isInitializing) {
+    console.log('[CONNECT] Already initializing, skipping...');
+    return;
+  }
 
-    try {
-      console.log('\n[CONNECT] Establishing chat connection...');
-      console.log('  Current user:', this.currentUser.name);
-      console.log('  User ID:', this.currentUser.userData.id || this.currentUser.id);
-      console.log('  Role:', this.currentUser.role);
-      console.log('  Has token:', !!this.currentUser.token);
-      
-      document.getElementById('role-selection').classList.add('hidden');
-      document.getElementById('chat-interface').classList.remove('hidden');
+  this.isInitializing = true;
 
-      document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
-      document.getElementById('user-name').textContent = this.currentUser.name;
-      document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
-      this.updateConnectionStatus('connecting', 'Connecting...');
+  try {
+    console.log('\n[CONNECT] Establishing chat connection...');
+    
+    await this.waitForDOM();
+    
+    console.log('  Current user:', this.currentUser.name);
+    console.log('  User ID:', this.currentUser.userData.id || this.currentUser.id);
+    console.log('  Role:', this.currentUser.role);
+    console.log('  Has token:', !!this.currentUser.token);
+    
+    document.getElementById('role-selection').classList.add('hidden');
+    document.getElementById('chat-interface').classList.remove('hidden');
 
-      console.log('\n[CONNECT] About to call chatService.initialize()');
-      console.log('  chatService exists:', !!this.chatService);
-      console.log('  chatService.initialize exists:', typeof this.chatService.initialize);
+    document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
+    document.getElementById('user-name').textContent = this.currentUser.name;
+    document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
+    this.updateConnectionStatus('connecting', 'Connecting...');
 
-      try {
-        console.log('  Calling chatService.initialize...');
-        
-        await this.chatService.initialize(
-          this.currentUser.userData.id || this.currentUser.id,
-          this.currentUser.role,
-          this.currentUser.token,
-          undefined,
-          {
-            id: this.currentUser.userData.id || this.currentUser.id,
-            externalId: this.currentUser.userData.id || this.currentUser.id,
-            name: this.currentUser.name,
-            email: this.currentUser.email,
-            phone: this.currentUser.phone,
-            role: this.currentUser.role
-          }
-        );
-
-        console.log('  chatService.initialize() completed');
-
-      } catch (initError) {
-        console.error('  chatService.initialize() threw error:', initError);
-        console.error('  Error name:', initError.name);
-        console.error('  Error message:', initError.message);
-        console.error('  Error stack:', initError.stack);
-        throw initError;
+    console.log('\n[CONNECT] Initializing chat service...');
+    
+    await this.chatService.initialize(
+      this.currentUser.userData.id || this.currentUser.id,
+      this.currentUser.role,
+      this.currentUser.token,
+      undefined,
+      {
+        id: this.currentUser.userData.id || this.currentUser.id,
+        externalId: this.currentUser.userData.id || this.currentUser.id,
+        name: this.currentUser.name,
+        email: this.currentUser.email,
+        phone: this.currentUser.phone,
+        role: this.currentUser.role
       }
+    );
 
-      console.log('  chatService initialized');
+    console.log('  ✓ chatService initialized');
 
-      this.setupEventListeners();
-      console.log('  Event listeners attached');
-      
-      this.setupOnlineUsersPanel();
-      console.log('  Online users panel setup');
-      
-      this.setupConversationsPanel();
-      console.log('  Conversations panel setup');
-      
-      await this.setupConversation();
-      console.log('  Ready for user selection');
-      
-      this.attachInputEvents();
-      console.log('  Input events attached');
-      
-      this.attachOnlineUsersPanelEvents();
-      console.log('  Panel events attached');
+    this.setupEventListeners();
+    console.log('  ✓ Event listeners attached');
+    
+    this.setupOnlineUsersPanel();
+    console.log('  ✓ Online users panel setup');
+    
+    this.setupConversationsPanel();
+    console.log('  ✓ Conversations panel setup');
+    
+    await this.setupConversation();
+    console.log('  ✓ Initial conversation setup');
+    
+    this.attachInputEvents();
+    console.log('  ✓ Input events attached');
+    
+    this.attachOnlineUsersPanelEvents();
+    console.log('  ✓ Panel events attached');
 
-      this.updateConnectionStatus('connected', 'Connected');
-      console.log('\n[CONNECT] Chat connected successfully!\n');
+    // ✅ LOAD ALL CONVERSATIONS AFTER CONNECTION
+    await this.loadAllConversations();
 
-    } catch (error) {
-      console.error('[CONNECT] Connection failed:', error);
-      console.error('Full error stack:', error.stack);
+    this.updateConnectionStatus('connected', 'Connected');
+    console.log('\n[CONNECT] Chat connected successfully!\n');
+
+  } catch (error) {
+    console.error('[CONNECT] Connection failed:', error);
+    console.error('Full error stack:', error.stack);
+    
+    this.updateConnectionStatus('error', 'Connection Error');
+    
+    const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
+    alert(errorMsg);
+    
+    document.getElementById('chat-interface').classList.add('hidden');
+    document.getElementById('role-selection').classList.remove('hidden');
+    
+    const connectBtn = document.getElementById('connect-btn');
+    connectBtn.textContent = 'Connect to Chat';
+    connectBtn.disabled = false;
+    
+  } finally {
+    this.isInitializing = false;
+  }
+}
+
+async loadAllConversations() {
+  console.log('\n[LOAD CONVERSATIONS] Loading all conversations...');
+  
+  try {
+    // Show loading state in conversations panel
+    const conversationsList = document.getElementById('conversations-list');
+    const emptyState = document.getElementById('conversations-empty-state');
+    
+    if (emptyState) {
+      emptyState.classList.add('hidden');
+    }
+    
+    if (conversationsList) {
+      conversationsList.innerHTML = `
+        <div class="flex items-center justify-center py-12">
+          <div class="text-center text-gray-500">
+            <div class="animate-spin w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full mx-auto mb-2"></div>
+            <p class="text-sm">Loading conversations...</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Fetch conversations from API
+    const response = await fetch('https://myusta.al/chat-backend/api/v1/conversations', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.currentUser.token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load conversations: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    console.log('[LOAD CONVERSATIONS] Response received:', {
+      success: data.success,
+      conversationCount: data.conversations?.length || 0
+    });
+    
+    if (!data.success || !data.conversations) {
+      throw new Error('Invalid response format from conversations API');
+    }
+    
+    // Add all conversations to state
+    data.conversations.forEach(conv => {
+      console.log('[LOAD CONVERSATIONS] Adding conversation to state:', {
+        id: conv.id,
+        participantCount: conv.participants?.length || 0,
+        hasLastMessage: !!conv.lastMessage
+      });
       
-      this.updateConnectionStatus('error', 'Connection Error');
-      
-      const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
-      alert(errorMsg);
-      
-      document.getElementById('chat-interface').classList.add('hidden');
-      document.getElementById('role-selection').classList.remove('hidden');
-      
-      const connectBtn = document.getElementById('connect-btn');
-      connectBtn.textContent = 'Connect to Chat';
-      connectBtn.disabled = false;
-    } finally {
-      this.isInitializing = false;
+      this.state.addConversation(conv);
+    });
+    
+    console.log(`[LOAD CONVERSATIONS] Added ${data.conversations.length} conversations to state`);
+    
+    // Render conversations in UI
+    this.renderConversations();
+    
+    console.log('[LOAD CONVERSATIONS] Conversations loaded successfully');
+    
+  } catch (error) {
+    console.error('[LOAD CONVERSATIONS] Failed to load conversations:', error);
+    console.error('[LOAD CONVERSATIONS] Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Show error state
+    const conversationsList = document.getElementById('conversations-list');
+    const emptyState = document.getElementById('conversations-empty-state');
+    
+    if (conversationsList) {
+      conversationsList.innerHTML = `
+        <div class="flex items-center justify-center py-12 px-4">
+          <div class="text-center text-red-500">
+            <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-sm font-medium mb-2">Failed to load conversations</p>
+            <p class="text-xs text-gray-600 mb-3">${this.escapeHtml(error.message)}</p>
+            <button onclick="window.chatApp.loadAllConversations()" class="px-3 py-1.5 bg-purple-500 text-white text-sm rounded hover:bg-purple-600">
+              Retry
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    if (emptyState) {
+      emptyState.classList.add('hidden');
     }
   }
+}
+
+
+// ✅ ADD THIS NEW METHOD
+async waitForDOM() {
+  console.log('[DOM] Waiting for DOM to be ready...');
+  
+  return new Promise((resolve) => {
+    if (document.readyState === 'complete') {
+      console.log('[DOM] DOM already ready');
+      resolve();
+      return;
+    }
+    
+    window.addEventListener('load', () => {
+      console.log('[DOM] DOM load complete');
+      resolve();
+    });
+  });
+}
+
+
+verifyDOM() {
+  console.log('[DOM] Verifying required elements...');
+  
+  const requiredIds = [
+    'role-selection',
+    'chat-interface',
+    'users-panel',
+    'users-panel-body',
+    'user-search',
+    'online-users-list',
+    'online-count',
+    'toggle-users-panel',
+    'conversations-panel',
+    'conversations-panel-body',
+    'conversation-search',
+    'conversations-list',
+    'conversations-empty-state',
+    'conversations-count',
+    'total-unread-badge',
+    'toggle-conversations-panel',
+    'messages-container',
+    'message-input',
+    'send-btn',
+    'user-avatar',
+    'user-name',
+    'user-role',
+    'status-dot',
+    'connection-text'
+  ];
+  
+  const missing = requiredIds.filter(id => !document.getElementById(id));
+  
+  if (missing.length > 0) {
+    console.error('[DOM] Missing required elements:', missing);
+    throw new Error(`Missing DOM elements: ${missing.join(', ')}`);
+  }
+  
+  console.log('[DOM] All required elements found ✓');
+  return true;
+}
 
   setupEventListeners() {
     console.log('\n[EVENTS] Setting up socket event listeners...');
@@ -765,27 +925,85 @@ class ChatApp {
     }, 30000);
   }
 
+
   setupConversationsPanel() {
-    console.log('\n[CONVERSATIONS] Setting up panel...');
+  console.log('\n[CONVERSATIONS] Setting up panel...');
+  
+  try {
+    // ✅ VERIFY ALL ELEMENTS EXIST
+    const elements = {
+      searchInput: document.getElementById('conversation-search'),
+      toggleBtn: document.getElementById('toggle-conversations-panel'),
+      panelBody: document.getElementById('conversations-panel-body'),
+      container: document.getElementById('conversations-list'),
+      emptyState: document.getElementById('conversations-empty-state'),
+      countBadge: document.getElementById('conversations-count'),
+      totalUnreadBadge: document.getElementById('total-unread-badge')
+    };
     
+    // Log what we found
+    console.log('[CONVERSATIONS] DOM elements check:', {
+      searchInput: !!elements.searchInput,
+      toggleBtn: !!elements.toggleBtn,
+      panelBody: !!elements.panelBody,
+      container: !!elements.container,
+      emptyState: !!elements.emptyState,
+      countBadge: !!elements.countBadge,
+      totalUnreadBadge: !!elements.totalUnreadBadge
+    });
+    
+    // Find missing elements
+    const missing = Object.entries(elements)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key);
+    
+    if (missing.length > 0) {
+      console.error('[CONVERSATIONS] Missing DOM elements:', missing);
+      throw new Error(`Missing required elements: ${missing.join(', ')}`);
+    }
+    
+    console.log('[CONVERSATIONS] All DOM elements found');
+    
+    // ✅ ENSURE PANEL IS VISIBLE
+    if (elements.panelBody.classList.contains('hidden')) {
+      console.log('[CONVERSATIONS] Panel body is hidden, making it visible');
+      elements.panelBody.classList.remove('hidden');
+      elements.toggleBtn.textContent = '▲';
+    }
+    
+    // ✅ INITIAL RENDER
+    console.log('[CONVERSATIONS] Performing initial render...');
     this.renderConversations();
     
-    const searchInput = document.getElementById('conversation-search');
-    searchInput.addEventListener('input', (e) => {
+    // ✅ ATTACH SEARCH EVENT
+    elements.searchInput.addEventListener('input', (e) => {
       this.conversationSearchTerm = e.target.value;
+      console.log('[CONVERSATIONS] Search term changed:', this.conversationSearchTerm);
       this.renderConversations();
     });
+    console.log('[CONVERSATIONS] Search event attached');
     
-    const toggleBtn = document.getElementById('toggle-conversations-panel');
-    const panelBody = document.getElementById('conversations-panel-body');
+    // ✅ ATTACH TOGGLE EVENT
+    elements.toggleBtn.addEventListener('click', () => {
+      elements.panelBody.classList.toggle('hidden');
+      elements.toggleBtn.textContent = elements.panelBody.classList.contains('hidden') ? '▼' : '▲';
+      console.log('[CONVERSATIONS] Panel toggled:', elements.panelBody.classList.contains('hidden') ? 'hidden' : 'visible');
+    });
+    console.log('[CONVERSATIONS] Toggle event attached');
     
-    toggleBtn.addEventListener('click', () => {
-      panelBody.classList.toggle('hidden');
-      toggleBtn.textContent = panelBody.classList.contains('hidden') ? '▼' : '▲';
+    console.log('[CONVERSATIONS] Panel setup complete ✓');
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] Setup failed:', error);
+    console.error('[CONVERSATIONS] Error details:', {
+      message: error.message,
+      stack: error.stack
     });
     
-    console.log('[CONVERSATIONS] Panel setup complete');
+    // Show user-friendly error
+    alert('Failed to setup conversations panel. Please refresh the page.');
   }
+}
 
   renderOnlineUsersLoading() {
     const container = document.getElementById('online-users-list');
@@ -797,279 +1015,756 @@ class ChatApp {
     `;
   }
 
+
   renderOnlineUsers() {
-    const container = document.getElementById('online-users-list');
-    const countBadge = document.getElementById('online-count');
+  const container = document.getElementById('online-users-list');
+  const countBadge = document.getElementById('online-count');
+  
+  const allUsers = this.state.getOnlineUsers();
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  
+  const filtered = this.searchTerm
+    ? allUsers.filter(user => 
+        user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
+      )
+    : allUsers;
+
+  countBadge.textContent = allUsers.length;
+
+  if (filtered.length === 0) {
+    const emptyMessage = this.searchTerm 
+      ? 'No users found' 
+      : 'No users online';
     
-    const allUsers = this.state.getOnlineUsers();
-    const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+    container.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <p>${emptyMessage}</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(user => {
+    const isCurrentUser = user.id === currentUserId;
     
-    const filtered = this.searchTerm
-      ? allUsers.filter(user => 
-          user.name.toLowerCase().includes(this.searchTerm.toLowerCase())
-        )
-      : allUsers;
-
-    countBadge.textContent = allUsers.length;
-
-    if (filtered.length === 0) {
-      const emptyMessage = this.searchTerm 
-        ? 'No users found' 
-        : 'No users online';
-      
-      container.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <p>${emptyMessage}</p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = filtered.map(user => {
-      const isCurrentUser = user.id === currentUserId;
-      
-      return `
-        <div 
-          class="flex items-center gap-3 p-3 rounded-lg transition-colors border-l-4 ${
+    return `
+      <div 
+        class="flex items-center gap-3 p-3 rounded-lg transition-colors border-l-4 ${
+          isCurrentUser 
+            ? 'bg-indigo-50 border-indigo-500 cursor-not-allowed opacity-75' 
+            : 'hover:bg-indigo-50 cursor-pointer group border-transparent hover:border-indigo-500'
+        }"
+        ${!isCurrentUser ? `onclick="window.chatApp.handleUserClick('${user.id}')"` : ''}
+        ${isCurrentUser ? 'title="You cannot message yourself"' : ''}
+      >
+        <div class="relative">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br ${
             isCurrentUser 
-              ? 'bg-indigo-50 border-indigo-500 cursor-not-allowed opacity-75' 
-              : 'hover:bg-indigo-50 cursor-pointer group border-transparent hover:border-indigo-500'
-          }"
-          ${!isCurrentUser ? `onclick="window.chatApp.startConversationWithUser(${this.escapeHtml(JSON.stringify(user))})"` : ''}
-          ${isCurrentUser ? 'title="You cannot message yourself"' : ''}
-        >
-          <div class="relative">
-            <div class="w-10 h-10 rounded-full bg-gradient-to-br ${
-              isCurrentUser 
-                ? 'from-purple-400 to-indigo-500' 
-                : 'from-indigo-400 to-purple-500'
-            } flex items-center justify-center text-white font-semibold shadow-lg">
-              ${user.name.charAt(0).toUpperCase()}
-            </div>
-            ${!isCurrentUser ? `
-              <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-            ` : ''}
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="font-medium text-gray-800 truncate ${!isCurrentUser ? 'group-hover:text-indigo-600' : ''}">
-              ${this.escapeHtml(user.name)}
-              ${isCurrentUser ? '<span class="ml-2 px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">You</span>' : ''}
-            </div>
-            <div class="text-xs text-gray-500 capitalize flex items-center gap-1">
-              ${!isCurrentUser ? '<span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>' : ''}
-              ${user.role || 'user'}
-            </div>
+              ? 'from-purple-400 to-indigo-500' 
+              : 'from-indigo-400 to-purple-500'
+          } flex items-center justify-center text-white font-semibold shadow-lg">
+            ${user.name.charAt(0).toUpperCase()}
           </div>
           ${!isCurrentUser ? `
-            <svg class="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
           ` : ''}
         </div>
-      `;
-    }).join('');
-  }
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-800 truncate ${!isCurrentUser ? 'group-hover:text-indigo-600' : ''}">
+            ${this.escapeHtml(user.name)}
+            ${isCurrentUser ? '<span class="ml-2 px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">You</span>' : ''}
+          </div>
+          <div class="text-xs text-gray-500 capitalize flex items-center gap-1">
+            ${!isCurrentUser ? '<span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>' : ''}
+            ${user.role || 'user'}
+          </div>
+        </div>
+        ${!isCurrentUser ? `
+          <svg class="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
 
-  renderConversations() {
-    const container = document.getElementById('conversations-list');
-    const emptyState = document.getElementById('conversations-empty-state');
-    const countBadge = document.getElementById('conversations-count');
-    const totalUnreadBadge = document.getElementById('total-unread-badge');
+// ✅ Add this new method
+handleUserClick(userId) {
+  console.log('[USER CLICK] User clicked:', userId);
+  
+  const user = this.state.getOnlineUser(userId);
+  
+  if (!user) {
+    console.error('[USER CLICK] User not found in state:', userId);
+    this.showToast('User not found', 'error');
+    return;
+  }
+  
+  console.log('[USER CLICK] Starting conversation with:', user.name);
+  this.startConversationWithUser(user);
+}
+
+renderConversations() {
+  console.log('[CONVERSATIONS] ========== START RENDER ==========');
+  
+  const container = document.getElementById('conversations-list');
+  const countBadge = document.getElementById('conversations-count');
+  const totalUnreadBadge = document.getElementById('total-unread-badge');
+  
+  if (!container) {
+    console.error('[CONVERSATIONS] conversations-list element not found');
+    return;
+  }
+  
+  if (!countBadge) {
+    console.error('[CONVERSATIONS] conversations-count badge not found');
+    return;
+  }
+  
+  if (!totalUnreadBadge) {
+    console.error('[CONVERSATIONS] total-unread-badge not found');
+    return;
+  }
+  
+  let emptyState = document.getElementById('conversations-empty-state');
+  if (!emptyState) {
+    console.warn('[CONVERSATIONS] conversations-empty-state not found, creating it');
+    emptyState = document.createElement('div');
+    emptyState.id = 'conversations-empty-state';
+    emptyState.className = 'text-center py-12 px-4 text-gray-500';
+    emptyState.innerHTML = `
+      <svg class="w-16 h-16 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+      <p class="text-sm font-medium mb-1">No conversations yet</p>
+      <p class="text-xs">Select a user to start chatting</p>
+    `;
+    container.parentElement.insertBefore(emptyState, container);
+  }
+  
+  let conversations = this.state.getSortedConversations();
+  
+  if (this.conversationSearchTerm) {
+    const term = this.conversationSearchTerm.toLowerCase();
+    conversations = conversations.filter(conv => {
+      const participantNames = conv.participants
+        .map(p => p.name || '')
+        .join(' ')
+        .toLowerCase();
+      
+      const lastMessage = conv.lastMessage?.content?.toLowerCase() || '';
+      const jobId = conv.metadata?.jobId?.toLowerCase() || '';
+      
+      return participantNames.includes(term) || lastMessage.includes(term) || jobId.includes(term);
+    });
+  }
+  
+  countBadge.textContent = conversations.length;
+  console.log(`[CONVERSATIONS] Rendering ${conversations.length} conversations`);
+  
+  const totalUnread = this.state.getTotalUnread();
+  if (totalUnread > 0) {
+    totalUnreadBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+    totalUnreadBadge.classList.remove('hidden');
+  } else {
+    totalUnreadBadge.classList.add('hidden');
+  }
+  
+  if (conversations.length === 0) {
+    console.log('[CONVERSATIONS] No conversations to show - displaying empty state');
+    emptyState.classList.remove('hidden');
+    container.innerHTML = '';
+    return;
+  }
+  
+  emptyState.classList.add('hidden');
+  
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  const activeConvId = this.state.getActiveConversationId();
+  
+  // Clear container
+  console.log('[CONVERSATIONS] Clearing container...');
+  container.innerHTML = '';
+  
+  // Store reference to this for use in event handlers
+  const self = this;
+  
+  console.log('[CONVERSATIONS] Creating conversation elements...');
+  
+  // Create conversation elements with proper event listeners
+  conversations.forEach((conv, index) => {
+    console.log(`[CONVERSATIONS] Processing conversation ${index + 1}/${conversations.length}:`, conv.id);
     
-    let conversations = this.state.getSortedConversations();
+    const otherParticipants = conv.participants.filter(p => p.userId !== currentUserId);
+    const otherUser = otherParticipants[0];
     
-    if (this.conversationSearchTerm) {
-      const term = this.conversationSearchTerm.toLowerCase();
-      conversations = conversations.filter(conv => {
-        const participantNames = conv.participants
-          .map(p => p.name || '')
-          .join(' ')
-          .toLowerCase();
-        
-        const lastMessage = conv.lastMessage?.content?.toLowerCase() || '';
-        
-        return participantNames.includes(term) || lastMessage.includes(term);
-      });
-    }
-    
-    countBadge.textContent = conversations.length;
-    
-    const totalUnread = this.state.getTotalUnread();
-    if (totalUnread > 0) {
-      totalUnreadBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-      totalUnreadBadge.classList.remove('hidden');
-    } else {
-      totalUnreadBadge.classList.add('hidden');
-    }
-    
-    if (conversations.length === 0) {
-      emptyState.classList.remove('hidden');
-      container.innerHTML = '';
+    if (!otherUser) {
+      console.warn('[CONVERSATIONS] No other participant found for conversation:', conv.id);
       return;
     }
     
-    emptyState.classList.add('hidden');
+    const isOnline = this.state.isUserOnline(otherUser.userId);
+    const lastMessage = conv.lastMessage;
     
-    const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
-    const activeConvId = this.state.getActiveConversationId();
+    // Safely extract text content from lastMessage
+    let lastMessageText = 'No messages yet';
+    if (lastMessage) {
+      if (typeof lastMessage.content === 'string') {
+        lastMessageText = lastMessage.content;
+      } else if (typeof lastMessage.contentText === 'string') {
+        lastMessageText = lastMessage.contentText;
+      } else if (lastMessage.content && typeof lastMessage.content.text === 'string') {
+        lastMessageText = lastMessage.content.text;
+      } else if (typeof lastMessage === 'string') {
+        lastMessageText = lastMessage;
+      }
+    }
     
-    container.innerHTML = conversations.map(conv => {
-      const otherParticipants = conv.participants.filter(p => p.userId !== currentUserId);
-      const otherUser = otherParticipants[0];
+    const lastMessageTime = lastMessage ? this.formatConversationTime(lastMessage.timestamp || lastMessage.createdAt) : '';
+    const isActive = conv.id === activeConvId;
+    const unreadCount = conv.unreadCount || 0;
+    const typingUsers = this.state.getTypingUsers(conv.id);
+    const isTyping = typingUsers.length > 0;
+    
+    // Get job ID from metadata
+    const jobId = conv.metadata?.jobId || conv.jobId || null;
+    const jobTitle = conv.metadata?.jobTitle || null;
+    
+    // Create conversation element
+    const convElement = document.createElement('div');
+    convElement.className = `flex items-center gap-3 p-4 hover:bg-purple-50 cursor-pointer transition-colors border-l-4 ${
+      isActive 
+        ? 'bg-purple-50 border-purple-500' 
+        : 'border-transparent hover:border-purple-300'
+    }`;
+    
+    // Store conversation ID as data attribute
+    convElement.dataset.conversationId = conv.id;
+    
+    convElement.innerHTML = `
+      <div class="relative flex-shrink-0">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-semibold shadow-md">
+          ${(otherUser.name || 'U').charAt(0).toUpperCase()}
+        </div>
+        ${isOnline ? `
+          <div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+        ` : ''}
+      </div>
       
-      if (!otherUser) return '';
-      
-      const isOnline = this.state.isUserOnline(otherUser.userId);
-      
-      const lastMessage = conv.lastMessage;
-      const lastMessageText = lastMessage ? lastMessage.content : 'No messages yet';
-      const lastMessageTime = lastMessage ? this.formatConversationTime(lastMessage.timestamp) : '';
-      
-      const isActive = conv.id === activeConvId;
-      
-      const unreadCount = conv.unreadCount || 0;
-      
-      const typingUsers = this.state.getTypingUsers(conv.id);
-      const isTyping = typingUsers.length > 0;
-      
-      return `
-        <div 
-          class="flex items-center gap-3 p-4 hover:bg-purple-50 cursor-pointer transition-colors border-l-4 ${
-            isActive 
-              ? 'bg-purple-50 border-purple-500' 
-              : 'border-transparent hover:border-purple-300'
-          }"
-          onclick="window.chatApp.selectConversation('${conv.id}')"
-        >
-          <div class="relative flex-shrink-0">
-            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-semibold shadow-md">
-              ${(otherUser.name || 'U').charAt(0).toUpperCase()}
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex flex-col flex-1 min-w-0">
+            <div class="font-semibold text-gray-800 truncate ${isActive ? 'text-purple-600' : ''}">
+              ${this.escapeHtml(otherUser.name || 'Unknown User')}
             </div>
-            ${isOnline ? `
-              <div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
-            ` : ''}
+${jobId ? `
+  <div class="text-xs text-gray-500 mt-0.5 break-all">
+    <span class="inline-flex items-start gap-1">
+      <svg class="w-3 h-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+      <span>Job: ${this.escapeHtml(jobId)}</span>
+    </span>
+  </div>
+  <div class="text-xs text-gray-400 mt-0.5 font-mono truncate" title="${conv.id}">
+    Conv: ${this.escapeHtml(conv.id)}
+  </div>
+` : `
+  <div class="text-xs text-gray-400 mt-0.5 font-mono truncate" title="${conv.id}">
+    Conv: ${this.escapeHtml(conv.id)}
+  </div>
+`}
+          </div>
+          ${lastMessageTime ? `
+            <div class="text-xs text-gray-500 flex-shrink-0 ml-2">
+              ${lastMessageTime}
+            </div>
+          ` : ''}
+        </div>
+        
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-gray-600 truncate flex-1">
+            ${isTyping ? `
+              <span class="text-purple-600 italic">typing...</span>
+            ` : `
+              ${lastMessage && lastMessage.senderId === currentUserId ? 'You: ' : ''}${this.escapeHtml(lastMessageText.substring(0, 50))}${lastMessageText.length > 50 ? '...' : ''}
+            `}
           </div>
           
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between mb-1">
-              <div class="font-semibold text-gray-800 truncate ${isActive ? 'text-purple-600' : ''}">
-                ${this.escapeHtml(otherUser.name || 'Unknown User')}
-              </div>
-              ${lastMessageTime ? `
-                <div class="text-xs text-gray-500 flex-shrink-0 ml-2">
-                  ${lastMessageTime}
-                </div>
-              ` : ''}
+          ${unreadCount > 0 ? `
+            <div class="flex-shrink-0 ml-2">
+              <span class="px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                ${unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             </div>
-            
-            <div class="flex items-center justify-between">
-              <div class="text-sm text-gray-600 truncate flex-1">
-                ${isTyping ? `
-                  <span class="text-purple-600 italic">typing...</span>
-                ` : `
-                  ${lastMessage && lastMessage.senderId === currentUserId ? 'You: ' : ''}${this.escapeHtml(lastMessageText.substring(0, 50))}${lastMessageText.length > 50 ? '...' : ''}
-                `}
-              </div>
-              
-              ${unreadCount > 0 ? `
-                <div class="flex-shrink-0 ml-2">
-                  <span class="px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
-                    ${unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                </div>
-              ` : ''}
-            </div>
-          </div>
+          ` : ''}
         </div>
-      `;
-    }).join('');
-  }
+      </div>
+    `;
+    
+    // Add click event listener with debugging
+    convElement.addEventListener('click', function(e) {
+      const conversationId = this.dataset.conversationId;
+      console.log('[CONVERSATIONS] ========== CLICK EVENT FIRED ==========');
+      console.log('[CONVERSATIONS] Element clicked:', this);
+      console.log('[CONVERSATIONS] Conversation ID:', conversationId);
+      console.log('[CONVERSATIONS] Event:', e);
+      console.log('[CONVERSATIONS] Calling selectConversation...');
+      
+      self.selectConversation(conversationId);
+    });
+    
+    console.log(`[CONVERSATIONS] Added event listener for conversation: ${conv.id}`);
+    
+    container.appendChild(convElement);
+    console.log(`[CONVERSATIONS] Appended conversation ${index + 1} to container`);
+  });
+  
+  console.log('[CONVERSATIONS] Final container children count:', container.children.length);
+  console.log('[CONVERSATIONS] ========== RENDER COMPLETE ==========');
+}
 
-  attachOnlineUsersPanelEvents() {
-    const toggleBtn = document.getElementById('toggle-panel');
-    const panelBody = document.getElementById('panel-body');
+
+attachOnlineUsersPanelEvents() {
+  console.log('[ONLINE USERS] Attaching panel events...');
+  
+  try {
+    const toggleBtn = document.getElementById('toggle-users-panel');
+    const panelBody = document.getElementById('users-panel-body');
+    const searchInput = document.getElementById('user-search');
+    
+    if (!toggleBtn || !panelBody || !searchInput) {
+      console.error('[ONLINE USERS] Missing panel elements:', {
+        toggleBtn: !!toggleBtn,
+        panelBody: !!panelBody,
+        searchInput: !!searchInput
+      });
+      return;
+    }
+    
+    // ✅ ENSURE PANEL IS VISIBLE
+    if (panelBody.classList.contains('hidden')) {
+      console.log('[ONLINE USERS] Panel body is hidden, making it visible');
+      panelBody.classList.remove('hidden');
+      toggleBtn.textContent = '▲';
+    }
     
     toggleBtn.addEventListener('click', () => {
       panelBody.classList.toggle('hidden');
       toggleBtn.textContent = panelBody.classList.contains('hidden') ? '▼' : '▲';
+      console.log('[ONLINE USERS] Panel toggled');
     });
 
-    const searchInput = document.getElementById('user-search');
     searchInput.addEventListener('input', (e) => {
       this.searchTerm = e.target.value;
       this.renderOnlineUsers();
     });
 
     window.chatApp = this;
-  }
-
-  async setupConversation() {
-    console.log('Skipping automatic conversation setup');
-    console.log('User will select who to chat with from online users');
     
-    const container = document.getElementById('messages-container');
-    container.innerHTML = `
-      <div class="flex items-center justify-center h-full">
-        <div class="text-center text-gray-500">
-          <svg class="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <p class="text-lg font-medium mb-2">Select a user to start chatting</p>
-          <p class="text-sm">Click on a user from the online users panel</p>
-        </div>
-      </div>
-    `;
+    console.log('[ONLINE USERS] Panel events attached ✓');
+    
+  } catch (error) {
+    console.error('[ONLINE USERS] Failed to attach events:', error);
   }
+}
 
-  async startConversationWithUser(user) {
-    const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
-    if (user.id === currentUserId) {
-      alert('You cannot start a conversation with yourself');
-      console.warn('[CONVERSATION] Attempted to start conversation with self - blocked');
-      return;
+async setupConversation() {
+  console.log('Initial setup - no automatic conversation creation');
+  console.log('User can select from online users or existing conversations');
+  
+  const container = document.getElementById('messages-container');
+  const emptyState = document.getElementById('chat-empty-state');
+  
+  if (emptyState) {
+    emptyState.classList.remove('hidden');
+  }
+  
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <svg class="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <p class="text-lg font-medium mb-2">Select a user or conversation to start chatting</p>
+        <p class="text-sm">Choose from your conversations or start a new one with an online user</p>
+      </div>
+    </div>
+  `;
+}
+
+async startConversationWithUser(user) {
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  
+  if (user.id === currentUserId) {
+    alert('You cannot start a conversation with yourself');
+    console.warn('[CONVERSATION] Attempted to start conversation with self - blocked');
+    return;
+  }
+  
+  console.log('[CONVERSATION] User selected:', user.name);
+  
+  // Check if conversation already exists in state
+  let existingConv = this.state.findConversationByParticipants(currentUserId, user.id);
+  
+  if (existingConv) {
+    console.log('[CONVERSATION] Found existing conversation in state:', existingConv.id);
+    await this.selectConversation(existingConv.id);
+    return;
+  }
+  
+  // No existing conversation - prepare for new conversation
+  console.log('[CONVERSATION] No existing conversation - ready to send first message');
+  
+  // Set receiver info for when user sends first message
+  this.currentUser.receiverId = user.id;
+  this.currentUser.receiverName = user.name;
+  
+  // Clear any active conversation
+  this.state.setActiveConversation(null);
+  
+  // Show empty chat ready for first message
+  const container = document.getElementById('messages-container');
+  const emptyState = document.getElementById('chat-empty-state');
+  
+  if (emptyState) {
+    emptyState.classList.add('hidden');
+  }
+  
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white text-2xl font-semibold shadow-lg">
+          ${user.name.charAt(0).toUpperCase()}
+        </div>
+        <p class="text-lg font-medium mb-2">Start a conversation with ${this.escapeHtml(user.name)}</p>
+        <p class="text-sm">Send your first message below</p>
+      </div>
+    </div>
+  `;
+  
+  // Focus the input
+  const input = document.getElementById('message-input');
+  if (input) {
+    input.focus();
+  }
+  
+  console.log('[CONVERSATION] Ready to start new conversation with', user.name);
+}
+
+
+async selectConversation(conversationId) {
+  console.log('============================================');
+  console.log('[CONVERSATION] selectConversation CALLED');
+  console.log('[CONVERSATION] conversationId:', conversationId);
+  console.log('============================================');
+  
+  const conversation = this.state.getConversation(conversationId);
+  
+  if (!conversation) {
+    console.error('[CONVERSATION] Conversation not found in state:', conversationId);
+    console.error('[CONVERSATION] Available conversations:', this.state.getAllConversations().map(c => c.id));
+    return;
+  }
+  
+  console.log('[CONVERSATION] Conversation found:', conversation);
+  
+  this.state.setActiveConversation(conversationId);
+  this.state.clearUnread(conversationId);
+  this.renderConversations();
+  
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  const otherParticipant = conversation.participants.find(p => p.userId !== currentUserId);
+  
+  if (otherParticipant) {
+    this.currentUser.receiverId = otherParticipant.userId;
+    this.currentUser.receiverName = otherParticipant.name;
+    console.log('[CONVERSATION] Set receiver:', otherParticipant.name);
+  }
+  
+  // Show loading state
+  const container = document.getElementById('messages-container');
+  const emptyState = document.getElementById('chat-empty-state');
+  
+  console.log('[CONVERSATION] Container found:', !!container);
+  console.log('[CONVERSATION] Empty state found:', !!emptyState);
+  
+  if (emptyState) {
+    emptyState.classList.add('hidden');
+  }
+  
+  if (!container) {
+    console.error('[CONVERSATION] messages-container not found!');
+    return;
+  }
+  
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <div class="animate-spin w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full mx-auto mb-4"></div>
+        <p class="text-sm">Loading messages...</p>
+      </div>
+    </div>
+  `;
+  
+  console.log('[CONVERSATION] Loading state displayed');
+  
+  try {
+    console.log('[CONVERSATION] Fetching messages from API...');
+    const url = `https://myusta.al/chat-backend/api/v1/conversations/${conversationId}/messages?limit=50&offset=0`;
+    console.log('[CONVERSATION] URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.currentUser.token}`
+      }
+    });
+    
+    console.log('[CONVERSATION] Response status:', response.status);
+    console.log('[CONVERSATION] Response ok:', response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CONVERSATION] Error response:', errorText);
+      throw new Error(`Failed to load messages: ${response.status} ${response.statusText}`);
     }
     
-    console.log('[CONVERSATION] Starting conversation with:', user.name);
+    const data = await response.json();
     
-    let existingConv = this.state.findConversationByParticipants(currentUserId, user.id);
+    console.log('[CONVERSATION] Full response data:', data);
+    console.log('[CONVERSATION] Success:', data.success);
+    console.log('[CONVERSATION] Messages array exists:', !!data.messages);
+    console.log('[CONVERSATION] Message count:', data.messages?.length || 0);
     
-    if (existingConv) {
-      console.log('[CONVERSATION] Found existing conversation in state:', existingConv.id);
+    if (!data.success || !data.messages) {
+      throw new Error('Invalid response format from messages API');
+    }
+    
+    console.log(`[CONVERSATION] Loaded ${data.messages.length} messages from server`);
+    
+    // Clear existing messages
+    this.state.clearMessages(conversationId);
+    console.log('[CONVERSATION] Cleared existing messages from state');
+    
+    // Add new messages
+    data.messages.forEach((msg, index) => {
+      // Fixed logging - handle content properly
+      let contentPreview = 'No content';
+      if (typeof msg.content === 'string') {
+        contentPreview = msg.content.substring(0, 50);
+      } else if (typeof msg.contentText === 'string') {
+        contentPreview = msg.contentText.substring(0, 50);
+      } else if (msg.content) {
+        contentPreview = JSON.stringify(msg.content).substring(0, 50);
+      }
       
-      await this.selectConversation(existingConv.id);
-      return;
+      console.log(`[CONVERSATION] Adding message ${index + 1}/${data.messages.length}:`, {
+        id: msg.id,
+        senderId: msg.senderId,
+        content: contentPreview,
+        timestamp: msg.timestamp || msg.createdAt
+      });
+      
+      this.state.addMessage(conversationId, msg);
+    });
+    
+    // Get messages from state
+    const messages = this.state.getMessages(conversationId);
+    console.log(`[CONVERSATION] Messages now in state:`, messages.length);
+    
+    if (messages.length > 0) {
+      console.log('[CONVERSATION] First message:', messages[0]);
+      console.log('[CONVERSATION] Last message:', messages[messages.length - 1]);
     }
     
-    const container = document.getElementById('messages-container');
-    const emptyState = document.getElementById('chat-empty-state');
+    // Render messages
+    container.innerHTML = '';
+    console.log('[CONVERSATION] Cleared container, starting render...');
     
-    if (emptyState) {
-      emptyState.classList.add('hidden');
+    if (messages.length === 0) {
+      console.log('[CONVERSATION] No messages to display - showing empty state');
+      container.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+          <div class="text-center text-gray-500">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p class="text-lg font-medium mb-2">No messages yet</p>
+            <p class="text-sm">Send a message to start the conversation</p>
+          </div>
+        </div>
+      `;
+    } else {
+      console.log('[CONVERSATION] Rendering', messages.length, 'messages...');
+      
+      messages.forEach((msg, index) => {
+        console.log(`[CONVERSATION] Calling renderMessage for message ${index + 1}:`, {
+          id: msg.id,
+          senderId: msg.senderId
+        });
+        
+        this.renderMessage(msg, false);
+      });
+      
+      console.log('[CONVERSATION] All messages rendered');
+      console.log('[CONVERSATION] Container children count:', container.children.length);
+      console.log('[CONVERSATION] Scrolling to bottom');
+      
+      container.scrollTop = container.scrollHeight;
+      
+      // Mark messages as read
+      const messageIds = messages.slice(-10).map(m => m.id).filter(id => id);
+      if (messageIds.length > 0) {
+        console.log('[CONVERSATION] Marking', messageIds.length, 'messages as read');
+        try {
+          await this.chatService.markMessagesAsRead(conversationId, messageIds);
+          console.log('[CONVERSATION] Messages marked as read successfully');
+        } catch (error) {
+          console.warn('[CONVERSATION] Failed to mark messages as read:', error);
+        }
+      }
     }
+    
+    console.log('[CONVERSATION] ✅ Successfully loaded and displayed', messages.length, 'messages');
+    console.log('============================================');
+    
+  } catch (error) {
+    console.error('[CONVERSATION] ❌ Failed to load messages:', error);
+    console.error('[CONVERSATION] Error message:', error.message);
+    console.error('[CONVERSATION] Error stack:', error.stack);
+    console.log('============================================');
     
     container.innerHTML = `
       <div class="flex items-center justify-center h-full">
-        <div class="text-center text-gray-500">
-          <div class="animate-spin w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-4"></div>
-          <p class="text-lg font-medium">Setting up conversation with ${user.name}...</p>
+        <div class="text-center text-red-500">
+          <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-lg font-medium mb-2">Failed to load messages</p>
+          <p class="text-sm mb-4">${this.escapeHtml(error.message)}</p>
+          <button onclick="window.chatApp.selectConversation('${conversationId}')" class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+            Try Again
+          </button>
         </div>
       </div>
     `;
+  }
+}
+
+
+async testLoadMessages(conversationId) {
+  console.log('========== TESTING MESSAGE LOAD ==========');
+  console.log('Conversation ID:', conversationId);
+  console.log('Token:', this.currentUser.token?.substring(0, 20) + '...');
+  
+  const url = `https://myusta.al/chat-backend/api/v1/conversations/${conversationId}/messages?limit=50&offset=0`;
+  console.log('URL:', url);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.currentUser.token}`
+      }
+    });
+    
+    console.log('Response status:', response.status);
+    console.log('Response headers:', [...response.headers.entries()]);
+    
+    const text = await response.text();
+    console.log('Raw response:', text);
     
     try {
-      this.currentUser.receiverId = user.id;
-      this.currentUser.receiverName = user.name;
+      const data = JSON.parse(text);
+      console.log('Parsed data:', data);
+      console.log('Message count:', data.messages?.length);
+      console.log('Messages:', data.messages);
+    } catch (e) {
+      console.error('Failed to parse JSON:', e);
+    }
+    
+  } catch (error) {
+    console.error('Fetch error:', error);
+  }
+  
+  console.log('========== TEST COMPLETE ==========');
+}
+
+async handleSend() {
+  const input = document.getElementById('message-input');
+  const text = input.value.trim();
+  
+  if (!text) return;
+  
+  const conversationId = this.state.getActiveConversationId();
+  
+  // Check if we have an active conversation or need to create one
+  if (!conversationId && !this.currentUser.receiverId) {
+    this.showToast('Please select a user to chat with', 'error');
+    return;
+  }
+  
+  try {
+    input.value = '';
+    
+    // Stop typing indicator
+    if (conversationId) {
+      this.chatService.sendTypingIndicator(
+        conversationId,
+        this.currentUser.receiverId,
+        false
+      );
+    }
+    
+    // Handle editing existing message
+    if (this.editingMessage) {
+      console.log('[SEND] Editing message:', this.editingMessage.messageId);
       
+      const messages = this.state.getMessages(conversationId);
+      const message = messages.find(m => 
+        m.id === this.editingMessage.messageId || 
+        m.clientTempId === this.editingMessage.messageId
+      );
+      
+      if (message) {
+        message.content = text;
+        message.isEdited = true;
+        message.editedAt = new Date().toISOString();
+        
+        const messageElement = document.querySelector(`[data-message-id="${this.editingMessage.messageId}"]`);
+        if (messageElement) {
+          messageElement.remove();
+        }
+        this.renderMessage(message, false);
+      }
+      
+      this.cancelEdit();
+      this.showToast('Message edited');
+      return;
+    }
+    
+    // If no conversation exists, create one first
+    if (!conversationId) {
+      console.log('[SEND] Creating new conversation before sending message');
+      
+      const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+      
+      // Create conversation
       const conversation = await this.chatService.findOrCreateJobConversation(
         this.jobId,
-        user.id
+        this.currentUser.receiverId
       );
-
-      console.log('[CONVERSATION] Got conversation from server:', conversation.id);
-
+      
+      console.log('[SEND] Conversation created:', conversation.id);
+      
+      // Add to state
       this.state.addConversation({
         id: conversation.id,
         participants: conversation.participants || [
@@ -1080,9 +1775,9 @@ class ChatApp {
             isActive: true
           },
           {
-            userId: user.id,
-            name: user.name,
-            isOnline: this.state.isUserOnline(user.id),
+            userId: this.currentUser.receiverId,
+            name: this.currentUser.receiverName,
+            isOnline: this.state.isUserOnline(this.currentUser.receiverId),
             isActive: true
           }
         ],
@@ -1095,109 +1790,195 @@ class ChatApp {
           isPinned: false,
           notificationEnabled: true
         },
-        lastMessage: conversation.lastMessage || null,
+        lastMessage: null,
         unreadCount: 0,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         lastActivity: conversation.updatedAt
       });
       
+      // Set as active
+      this.state.setActiveConversation(conversation.id);
+      
+      // Clear the messages container
+      const container = document.getElementById('messages-container');
+      container.innerHTML = '';
+      
+      // Update conversations list
       this.renderConversations();
-
-      console.log('[CONVERSATION] Added to state manager');
-
-      const result = await this.chatService.loadMessages(conversation.id, {
-        page: 1,
-        limit: 50
-      });
-
-      result.messages.forEach(msg => {
-        this.state.addMessage(conversation.id, msg);
-      });
-
-      console.log(`[CONVERSATION] Loaded ${result.messages.length} messages from server`);
-
-      await this.selectConversation(conversation.id);
-
-      if (result.messages.length === 0) {
-        setTimeout(() => {
-          this.chatService.sendTextMessage(
-            conversation.id,
-            `Hello ${user.name}! I'm ${this.currentUser.name}.`,
-            user.id
-          );
-        }, 500);
-      }
       
-      console.log('[CONVERSATION] Ready');
-      
-    } catch (error) {
-      console.error('[CONVERSATION] Failed to setup:', error);
-      
-      container.innerHTML = `
-        <div class="flex items-center justify-center h-full">
-          <div class="text-center text-red-500">
-            <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p class="text-lg font-medium mb-2">Failed to setup conversation</p>
-            <p class="text-sm">${this.escapeHtml(error.message)}</p>
-            <button onclick="window.chatApp.startConversationWithUser(${this.escapeHtml(JSON.stringify(user))})" class="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">
-              Try Again
-            </button>
-          </div>
-        </div>
-      `;
+      console.log('[SEND] Conversation setup complete, now sending message');
     }
+    
+    const activeConvId = this.state.getActiveConversationId();
+    const replyTo = this.replyingTo ? this.replyingTo.messageId : undefined;
+    
+    console.log('[SEND] Sending message:', {
+      conversationId: activeConvId,
+      receiverId: this.currentUser.receiverId,
+      textLength: text.length,
+      replyTo
+    });
+    
+    await this.chatService.sendTextMessage(
+      activeConvId,
+      text,
+      this.currentUser.receiverId,
+      replyTo
+    );
+    
+    if (this.replyingTo) {
+      this.cancelReply();
+    }
+    
+    console.log('[SEND] Message sent successfully');
+    
+  } catch (error) {
+    console.error('[SEND] Failed to send message:', error);
+    input.value = text;
+    this.showErrorNotification('Failed to send message: ' + error.message);
   }
+}
 
-  async selectConversation(conversationId) {
-    console.log('[CONVERSATION] Selecting conversation:', conversationId);
+
+async startConversationWithUser(user) {
+  const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+  if (user.id === currentUserId) {
+    alert('You cannot start a conversation with yourself');
+    console.warn('[CONVERSATION] Attempted to start conversation with self - blocked');
+    return;
+  }
+  
+  console.log('[CONVERSATION] Starting conversation with:', user.name);
+  console.log('[CONVERSATION] Current user ID:', currentUserId);
+  console.log('[CONVERSATION] Other user ID:', user.id);
+  
+  let existingConv = this.state.findConversationByParticipants(currentUserId, user.id);
+  
+  if (existingConv) {
+    console.log('[CONVERSATION] Found existing conversation in state:', existingConv.id);
+    await this.selectConversation(existingConv.id);
+    return;
+  }
+  
+  const container = document.getElementById('messages-container');
+  const emptyState = document.getElementById('chat-empty-state');
+  
+  if (emptyState) {
+    emptyState.classList.add('hidden');
+  }
+  
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <div class="animate-spin w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-4"></div>
+        <p class="text-lg font-medium">Setting up conversation with ${user.name}...</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    this.currentUser.receiverId = user.id;
+    this.currentUser.receiverName = user.name;
     
-    const conversation = this.state.getConversation(conversationId);
-    
-    if (!conversation) {
-      console.error('[CONVERSATION] Conversation not found:', conversationId);
-      return;
-    }
-    
-    this.state.setActiveConversation(conversationId);
-    
-    this.state.clearUnread(conversationId);
+    // ✅ Pass the OTHER user's ID (not current user)
+    // The backend automatically includes the current authenticated user
+    console.log('[CONVERSATION] Creating conversation with participant:', user.id);
+    const conversation = await this.chatService.findOrCreateJobConversation(
+      this.jobId,
+      user.id  // ← Back to user.id (the other person)
+    );
+
+    console.log('[CONVERSATION] Got conversation from server:', conversation.id);
+
+    this.state.addConversation({
+      id: conversation.id,
+      participants: conversation.participants || [
+        { 
+          userId: currentUserId,
+          name: this.currentUser.name,
+          isOnline: true,
+          isActive: true
+        },
+        {
+          userId: user.id,
+          name: user.name,
+          isOnline: this.state.isUserOnline(user.id),
+          isActive: true
+        }
+      ],
+      metadata: conversation.metadata || {
+        jobId: this.jobId,
+        jobTitle: this.jobTitle
+      },
+      settings: conversation.settings || {
+        isMuted: false,
+        isPinned: false,
+        notificationEnabled: true
+      },
+      lastMessage: conversation.lastMessage || null,
+      unreadCount: 0,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      lastActivity: conversation.updatedAt
+    });
     
     this.renderConversations();
-    
-    const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
-    const otherParticipant = conversation.participants.find(p => p.userId !== currentUserId);
-    
-    if (otherParticipant) {
-      this.currentUser.receiverId = otherParticipant.userId;
-      this.currentUser.receiverName = otherParticipant.name;
+
+    console.log('[CONVERSATION] Added to state manager');
+
+    const result = await this.chatService.loadMessages(conversation.id, {
+      page: 1,
+      limit: 50
+    });
+
+    result.messages.forEach(msg => {
+      this.state.addMessage(conversation.id, msg);
+    });
+
+    console.log(`[CONVERSATION] Loaded ${result.messages.length} messages from server`);
+
+    await this.selectConversation(conversation.id);
+
+    if (result.messages.length === 0) {
+      setTimeout(() => {
+        this.chatService.sendTextMessage(
+          conversation.id,
+          `Hello ${user.name}! I'm ${this.currentUser.name}.`,
+          user.id
+        );
+      }, 500);
     }
     
-    const messages = this.state.getMessages(conversationId);
+    console.log('[CONVERSATION] Ready');
     
-    const container = document.getElementById('messages-container');
-    const emptyState = document.getElementById('chat-empty-state');
+  } catch (error) {
+    console.error('[CONVERSATION] Failed to setup:', error);
+    console.error('[CONVERSATION] Error details:', {
+      message: error.message,
+      currentUserId,
+      otherUserId: user.id,
+      jobId: this.jobId
+    });
     
-    if (emptyState) {
-      emptyState.classList.add('hidden');
-    }
-    
-    container.innerHTML = '';
-    messages.forEach(msg => this.renderMessage(msg, false));
-    
-    container.scrollTop = container.scrollHeight;
-    
-    if (messages.length > 0) {
-      const messageIds = messages.slice(-10).map(m => m.id).filter(id => id);
-      if (messageIds.length > 0) {
-        this.chatService.markMessagesAsRead(conversationId, messageIds);
-      }
-    }
-    
-    console.log('[CONVERSATION] Selected, showing', messages.length, 'messages');
+    container.innerHTML = `
+      <div class="flex items-center justify-center h-full">
+        <div class="text-center text-red-500">
+          <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-lg font-medium mb-2">Failed to setup conversation</p>
+          <p class="text-sm">${this.escapeHtml(error.message)}</p>
+          <button onclick="window.chatApp.startConversationWithUser(${this.escapeHtml(JSON.stringify(user))})" class="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">
+            Try Again
+          </button>
+        </div>
+      </div>
+    `;
   }
+}
+
+
 
   attachInputEvents() {
     const input = document.getElementById('message-input');
@@ -1313,161 +2094,176 @@ class ChatApp {
   // PHASE 3.1 + 3.2: ENHANCED MESSAGE DISPLAY
   // ==========================================
 
-  renderMessage(message, animate = true) {
-    const container = document.getElementById('messages-container');
-    const isMine = message.senderId === this.currentUser.userData?.id || message.senderId === this.currentUser.id;
-    
-    const messages = Array.from(container.children).filter(el => el.classList.contains('message-wrapper'));
-    const lastMessage = messages[messages.length - 1];
-    
-    let shouldGroup = false;
-    if (lastMessage) {
-      const prevSenderId = lastMessage.dataset.senderId;
-      const prevTimestamp = lastMessage.dataset.timestamp;
-      const timeDiff = new Date(message.timestamp) - new Date(prevTimestamp);
-      shouldGroup = prevSenderId === message.senderId && timeDiff < 300000;
-    }
-    
-    const needsDateSeparator = this.needsDateSeparator(container, message.timestamp);
-    
-    if (needsDateSeparator) {
-      const separator = this.createDateSeparator(message.timestamp);
-      container.appendChild(separator);
-    }
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message-wrapper ${shouldGroup ? 'mb-1' : 'mb-4'}`;
-    messageDiv.dataset.messageId = message.id || message.clientTempId;
-    messageDiv.dataset.senderId = message.senderId;
-    messageDiv.dataset.timestamp = message.timestamp;
-    
-    if (!animate) {
-      messageDiv.style.animation = 'none';
-    }
-    
-    const statusIcon = this.getEnhancedStatusIcon(message.status);
-    const canEdit = isMine && this.canEditMessage(message);
-    const canDelete = isMine;
-    
-    messageDiv.innerHTML = `
-      <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
-        <div class="flex gap-2 max-w-[70%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
-          ${!shouldGroup ? `
-            <div class="flex-shrink-0">
-              <div class="w-8 h-8 rounded-full bg-gradient-to-br ${
-                isMine 
-                  ? 'from-indigo-400 to-purple-500' 
-                  : 'from-purple-400 to-pink-500'
-              } flex items-center justify-center text-white text-xs font-semibold shadow">
-                ${(isMine ? this.currentUser.name : this.currentUser.receiverName || 'U').charAt(0).toUpperCase()}
+renderMessage(message, animate = true) {
+  const container = document.getElementById('messages-container');
+  const isMine = message.senderId === this.currentUser.userData?.id || message.senderId === this.currentUser.id;
+  
+  const messages = Array.from(container.children).filter(el => el.classList.contains('message-wrapper'));
+  const lastMessage = messages[messages.length - 1];
+  
+  let shouldGroup = false;
+  if (lastMessage) {
+    const prevSenderId = lastMessage.dataset.senderId;
+    const prevTimestamp = lastMessage.dataset.timestamp;
+    const timeDiff = new Date(message.timestamp).getTime() - new Date(prevTimestamp).getTime();
+    shouldGroup = prevSenderId === message.senderId && timeDiff < 300000;
+  }
+  
+  const needsDateSeparator = this.needsDateSeparator(container, message.timestamp);
+  
+  if (needsDateSeparator) {
+    const separator = this.createDateSeparator(message.timestamp);
+    container.appendChild(separator);
+  }
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message-wrapper ${shouldGroup ? 'mb-1' : 'mb-4'}`;
+  messageDiv.dataset.messageId = message.id || message.clientTempId;
+  messageDiv.dataset.senderId = message.senderId;
+  messageDiv.dataset.timestamp = message.timestamp;
+  
+  if (!animate) {
+    messageDiv.style.animation = 'none';
+  }
+  
+  const statusIcon = this.getEnhancedStatusIcon(message.status);
+  const canEdit = isMine && this.canEditMessage(message);
+  const canDelete = isMine;
+  
+  // ✅ FIXED: Extract text content properly
+  let messageContent = '';
+  if (typeof message.content === 'string') {
+    messageContent = message.content;
+  } else if (typeof message.contentText === 'string') {
+    messageContent = message.contentText;
+  } else if (message.content && typeof message.content.text === 'string') {
+    messageContent = message.content.text;
+  } else if (message.content && typeof message.content === 'object') {
+    messageContent = message.content.contentText || JSON.stringify(message.content);
+  } else {
+    messageContent = 'No content';
+  }
+  
+  messageDiv.innerHTML = `
+    <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+      <div class="flex gap-2 max-w-[70%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
+        ${!shouldGroup ? `
+          <div class="flex-shrink-0">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br ${
+              isMine 
+                ? 'from-indigo-400 to-purple-500' 
+                : 'from-purple-400 to-pink-500'
+            } flex items-center justify-center text-white text-xs font-semibold shadow">
+              ${(isMine ? this.currentUser.name : this.currentUser.receiverName || 'U').charAt(0).toUpperCase()}
+            </div>
+          </div>
+        ` : '<div class="w-8"></div>'}
+        
+        <div class="flex-1 min-w-0">
+          ${!shouldGroup && !isMine ? `
+            <div class="text-xs text-gray-500 mb-1 ml-2 font-medium">${this.escapeHtml(this.currentUser.receiverName || 'User')}</div>
+          ` : ''}
+          
+          ${message.replyTo ? `
+            <div class="mb-1 ml-2">
+              <div class="text-xs p-2 rounded-lg bg-gray-100 border-l-2 ${isMine ? 'border-indigo-400' : 'border-purple-400'} cursor-pointer hover:bg-gray-200 transition-colors"
+                   onclick="window.chatApp.scrollToMessage('${message.replyTo}')">
+                <div class="text-gray-600 font-medium mb-0.5">↩ Replying to</div>
+                <div class="text-gray-700 truncate">${this.escapeHtml(this.getReplyPreview(message.replyTo))}</div>
               </div>
             </div>
-          ` : '<div class="w-8"></div>'}
+          ` : ''}
           
-          <div class="flex-1 min-w-0">
-            ${!shouldGroup && !isMine ? `
-              <div class="text-xs text-gray-500 mb-1 ml-2 font-medium">${this.escapeHtml(this.currentUser.receiverName || 'User')}</div>
-            ` : ''}
-            
-            ${message.replyTo ? `
-              <div class="mb-1 ml-2">
-                <div class="text-xs p-2 rounded-lg bg-gray-100 border-l-2 ${isMine ? 'border-indigo-400' : 'border-purple-400'} cursor-pointer hover:bg-gray-200 transition-colors"
-                     onclick="window.chatApp.scrollToMessage('${message.replyTo}')">
-                  <div class="text-gray-600 font-medium mb-0.5">↩ Replying to</div>
-                  <div class="text-gray-700 truncate">${this.escapeHtml(this.getReplyPreview(message.replyTo))}</div>
-                </div>
-              </div>
-            ` : ''}
-            
-            <div class="group relative">
-              <div class="message-bubble rounded-2xl px-4 py-2.5 ${
-                isMine 
-                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm' 
-                  : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
-              } ${message.status === this.MessageStatus.FAILED ? 'opacity-60 border-red-300' : ''}">
-                
-                <div class="break-words whitespace-pre-wrap" id="message-content-${message.id || message.clientTempId}">
-                  ${this.escapeHtml(message.content)}
-                </div>
-                
-                ${message.isEdited ? `
-                  <div class="text-xs ${isMine ? 'text-indigo-200' : 'text-gray-400'} mt-1">
-                    (edited)
-                  </div>
-                ` : ''}
-                
-                <div class="text-xs mt-1 flex items-center gap-1.5 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
-                  <span>${this.formatTime(message.timestamp)}</span>
-                  ${isMine ? `<span>${statusIcon}</span>` : ''}
-                </div>
+          <div class="group relative">
+            <div class="message-bubble rounded-2xl px-4 py-2.5 ${
+              isMine 
+                ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm' 
+                : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
+            } ${message.status === this.MessageStatus.FAILED ? 'opacity-60 border-red-300' : ''}">
+              
+              <div class="break-words whitespace-pre-wrap" id="message-content-${message.id || message.clientTempId}">
+                ${this.escapeHtml(messageContent)}
               </div>
               
-              ${message.status === this.MessageStatus.FAILED ? `
+              ${message.isEdited ? `
+                <div class="text-xs ${isMine ? 'text-indigo-200' : 'text-gray-400'} mt-1">
+                  (edited)
+                </div>
+              ` : ''}
+              
+              <div class="text-xs mt-1 flex items-center gap-1.5 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
+                <span>${this.formatTime(message.timestamp)}</span>
+                ${isMine ? `<span>${statusIcon}</span>` : ''}
+              </div>
+            </div>
+            
+            ${message.status === this.MessageStatus.FAILED ? `
+              <button 
+                onclick="window.chatApp.retryMessage('${message.id || message.clientTempId}')"
+                class="mt-1 text-xs px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Retry
+              </button>
+            ` : ''}
+            
+            <div class="message-actions absolute ${isMine ? 'left-0' : 'right-0'} top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 -translate-y-8">
+              <button 
+                onclick="window.chatApp.replyToMessage('${message.id || message.clientTempId}')"
+                class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+                title="Reply"
+              >
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              </button>
+              
+              <button 
+                onclick="window.chatApp.copyMessage('${message.id || message.clientTempId}')"
+                class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+                title="Copy"
+              >
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+              
+              ${canEdit ? `
                 <button 
-                  onclick="window.chatApp.retryMessage('${message.id || message.clientTempId}')"
-                  class="mt-1 text-xs px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-1"
+                  onclick="window.chatApp.editMessage('${message.id || message.clientTempId}')"
+                  class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+                  title="Edit"
                 >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
-                  Retry
                 </button>
               ` : ''}
               
-              <div class="message-actions absolute ${isMine ? 'left-0' : 'right-0'} top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 -translate-y-8">
+              ${canDelete ? `
                 <button 
-                  onclick="window.chatApp.replyToMessage('${message.id || message.clientTempId}')"
-                  class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-                  title="Reply"
+                  onclick="window.chatApp.deleteMessage('${message.id || message.clientTempId}')"
+                  class="p-1.5 bg-white rounded-lg shadow-md hover:bg-red-50 transition-colors"
+                  title="Delete"
                 >
-                  <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
-                
-                <button 
-                  onclick="window.chatApp.copyMessage('${message.id || message.clientTempId}')"
-                  class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-                  title="Copy"
-                >
-                  <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                
-                ${canEdit ? `
-                  <button 
-                    onclick="window.chatApp.editMessage('${message.id || message.clientTempId}')"
-                    class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-                    title="Edit"
-                  >
-                    <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                ` : ''}
-                
-                ${canDelete ? `
-                  <button 
-                    onclick="window.chatApp.deleteMessage('${message.id || message.clientTempId}')"
-                    class="p-1.5 bg-white rounded-lg shadow-md hover:bg-red-50 transition-colors"
-                    title="Delete"
-                  >
-                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                ` : ''}
-              </div>
+              ` : ''}
             </div>
           </div>
         </div>
       </div>
-    `;
-    
-    container.appendChild(messageDiv);
-    container.scrollTop = container.scrollHeight;
-  }
+    </div>
+  `;
+  
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
 
   needsDateSeparator(container, timestamp) {
     const messages = Array.from(container.children).filter(el => 

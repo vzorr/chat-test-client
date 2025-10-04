@@ -96,33 +96,53 @@ export abstract class BaseConversationService {
     };
   }
 
+
   /**
-   * Validate conversation creation parameters - shared validation
-   */
-  protected validateConversationCreation(params: {
-    participantIds: string[];
-    type: ConversationType;
-    jobId?: string;
-  }): void {
-    if (!params.participantIds || params.participantIds.length < 2) {
-      throw new ValidationException('At least 2 participants required');
-    }
-    
-    if (params.type === ConversationType.JOB_CHAT && !params.jobId) {
-      throw new ValidationException('Job ID required for job chat');
-    }
-    
-    // Remove duplicates
-    const uniqueParticipants = [...new Set(params.participantIds)];
-    if (uniqueParticipants.length !== params.participantIds.length) {
-      throw new ValidationException('Duplicate participant IDs found');
-    }
-    
-    // Check if current user is included
-    if (!params.participantIds.includes(this.userId)) {
-      throw new ValidationException('Current user must be included in participants');
-    }
+ * Validate conversation creation parameters - shared validation
+ */
+protected validateConversationCreation(params: {
+  participantIds: string[];
+  type: ConversationType;
+  jobId?: string;
+}): void {
+  // Validate participant IDs exist and format
+  if (!params.participantIds || !Array.isArray(params.participantIds)) {
+    throw new ValidationException('Participant IDs must be provided as an array');
   }
+  
+  // At least 1 other participant required (current user added by backend)
+  if (params.participantIds.length < 1) {
+    throw new ValidationException('At least 1 participant required');
+  }
+  
+  // Maximum participants check
+  if (params.participantIds.length > 50) {
+    throw new ValidationException('Cannot have more than 50 participants');
+  }
+  
+  // Validate job chat requirements
+  if (params.type === ConversationType.JOB_CHAT && !params.jobId) {
+    throw new ValidationException('Job ID required for job chat');
+  }
+  
+  // Check for duplicate participant IDs
+  const uniqueParticipants = [...new Set(params.participantIds)];
+  if (uniqueParticipants.length !== params.participantIds.length) {
+    throw new ValidationException('Duplicate participant IDs found');
+  }
+  
+  // Validate participant ID format (basic check)
+  params.participantIds.forEach(id => {
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new ValidationException('All participant IDs must be valid non-empty strings');
+    }
+  });
+  
+  // NOTE: We don't validate if current user is included because
+  // the backend automatically adds the authenticated user to participants.
+  // The participantIds array should only contain OTHER users to chat with.
+}
+
 
   /**
    * Find conversation in cache by criteria - shared search
