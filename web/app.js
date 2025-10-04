@@ -929,84 +929,7 @@ verifyDOM() {
   }
 
 
-  setupConversationsPanel() {
-  console.log('\n[CONVERSATIONS] Setting up panel...');
-  
-  try {
-    // ✅ VERIFY ALL ELEMENTS EXIST
-    const elements = {
-      searchInput: document.getElementById('conversation-search'),
-      toggleBtn: document.getElementById('toggle-conversations-panel'),
-      panelBody: document.getElementById('conversations-panel-body'),
-      container: document.getElementById('conversations-list'),
-      emptyState: document.getElementById('conversations-empty-state'),
-      countBadge: document.getElementById('conversations-count'),
-      totalUnreadBadge: document.getElementById('total-unread-badge')
-    };
-    
-    // Log what we found
-    console.log('[CONVERSATIONS] DOM elements check:', {
-      searchInput: !!elements.searchInput,
-      toggleBtn: !!elements.toggleBtn,
-      panelBody: !!elements.panelBody,
-      container: !!elements.container,
-      emptyState: !!elements.emptyState,
-      countBadge: !!elements.countBadge,
-      totalUnreadBadge: !!elements.totalUnreadBadge
-    });
-    
-    // Find missing elements
-    const missing = Object.entries(elements)
-      .filter(([key, value]) => !value)
-      .map(([key]) => key);
-    
-    if (missing.length > 0) {
-      console.error('[CONVERSATIONS] Missing DOM elements:', missing);
-      throw new Error(`Missing required elements: ${missing.join(', ')}`);
-    }
-    
-    console.log('[CONVERSATIONS] All DOM elements found');
-    
-    // ✅ ENSURE PANEL IS VISIBLE
-    if (elements.panelBody.classList.contains('hidden')) {
-      console.log('[CONVERSATIONS] Panel body is hidden, making it visible');
-      elements.panelBody.classList.remove('hidden');
-      elements.toggleBtn.textContent = '▲';
-    }
-    
-    // ✅ INITIAL RENDER
-    console.log('[CONVERSATIONS] Performing initial render...');
-    this.renderConversations();
-    
-    // ✅ ATTACH SEARCH EVENT
-    elements.searchInput.addEventListener('input', (e) => {
-      this.conversationSearchTerm = e.target.value;
-      console.log('[CONVERSATIONS] Search term changed:', this.conversationSearchTerm);
-      this.renderConversations();
-    });
-    console.log('[CONVERSATIONS] Search event attached');
-    
-    // ✅ ATTACH TOGGLE EVENT
-    elements.toggleBtn.addEventListener('click', () => {
-      elements.panelBody.classList.toggle('hidden');
-      elements.toggleBtn.textContent = elements.panelBody.classList.contains('hidden') ? '▼' : '▲';
-      console.log('[CONVERSATIONS] Panel toggled:', elements.panelBody.classList.contains('hidden') ? 'hidden' : 'visible');
-    });
-    console.log('[CONVERSATIONS] Toggle event attached');
-    
-    console.log('[CONVERSATIONS] Panel setup complete ✓');
-    
-  } catch (error) {
-    console.error('[CONVERSATIONS] Setup failed:', error);
-    console.error('[CONVERSATIONS] Error details:', {
-      message: error.message,
-      stack: error.stack
-    });
-    
-    // Show user-friendly error
-    alert('Failed to setup conversations panel. Please refresh the page.');
-  }
-}
+
 
   renderOnlineUsersLoading() {
     const container = document.getElementById('online-users-list');
@@ -1332,49 +1255,7 @@ ${jobId ? `
 }
 
 
-attachOnlineUsersPanelEvents() {
-  console.log('[ONLINE USERS] Attaching panel events...');
-  
-  try {
-    const toggleBtn = document.getElementById('toggle-users-panel');
-    const panelBody = document.getElementById('users-panel-body');
-    const searchInput = document.getElementById('user-search');
-    
-    if (!toggleBtn || !panelBody || !searchInput) {
-      console.error('[ONLINE USERS] Missing panel elements:', {
-        toggleBtn: !!toggleBtn,
-        panelBody: !!panelBody,
-        searchInput: !!searchInput
-      });
-      return;
-    }
-    
-    // ✅ ENSURE PANEL IS VISIBLE
-    if (panelBody.classList.contains('hidden')) {
-      console.log('[ONLINE USERS] Panel body is hidden, making it visible');
-      panelBody.classList.remove('hidden');
-      toggleBtn.textContent = '▲';
-    }
-    
-    toggleBtn.addEventListener('click', () => {
-      panelBody.classList.toggle('hidden');
-      toggleBtn.textContent = panelBody.classList.contains('hidden') ? '▼' : '▲';
-      console.log('[ONLINE USERS] Panel toggled');
-    });
 
-    searchInput.addEventListener('input', (e) => {
-      this.searchTerm = e.target.value;
-      this.renderOnlineUsers();
-    });
-
-    window.chatApp = this;
-    
-    console.log('[ONLINE USERS] Panel events attached ✓');
-    
-  } catch (error) {
-    console.error('[ONLINE USERS] Failed to attach events:', error);
-  }
-}
 
 async setupConversation() {
   console.log('Initial setup - no automatic conversation creation');
@@ -2022,215 +1903,367 @@ async startConversationWithUser(user) {
     });
   }
 
+  // Find the setupConversationsPanel method and replace the toggle event section:
+
+
+// ==========================================
+// PANEL FUNCTIONS - KEEP ONLY THESE VERSIONS
+// DELETE ALL OTHER COPIES IN YOUR FILE
+// ==========================================
+
+// ==========================================
+// FUNCTION 1: attachOnlineUsersPanelEvents
+// PURPOSE: Attach all event listeners for online users panel
+// INCLUDES: Toggle buttons (header + icon), search functionality
+// ==========================================
+
+attachOnlineUsersPanelEvents() {
+  console.log('[ONLINE USERS] Attaching panel events...');
+  
+  try {
+    // Get all required elements
+    const toggleBtn = document.getElementById('toggle-users-panel');
+    const toggleBtnIcon = document.getElementById('toggle-users-panel-icon');
+    const searchInput = document.getElementById('user-search');
+    const usersPanel = document.getElementById('users-panel');
+    
+    // Validate panel exists
+    if (!usersPanel) {
+      console.error('[ONLINE USERS] users-panel element not found in DOM');
+      throw new Error('users-panel element is required');
+    }
+    
+    // Log element status
+    console.log('[ONLINE USERS] Element validation:', {
+      'toggle-users-panel (header button)': !!toggleBtn,
+      'toggle-users-panel-icon (sidebar icon)': !!toggleBtnIcon,
+      'user-search (search input)': !!searchInput,
+      'users-panel (main container)': !!usersPanel
+    });
+    
+    // ✅ EVENT 1: Desktop header toggle button
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        usersPanel.classList.toggle('panel-collapsed');
+        const state = usersPanel.classList.contains('panel-collapsed') ? 'COLLAPSED' : 'EXPANDED';
+        console.log(`[ONLINE USERS] Panel toggled from HEADER button → ${state}`);
+      });
+      console.log('[ONLINE USERS] ✓ Header toggle button listener attached');
+    } else {
+      console.warn('[ONLINE USERS] ⚠ toggle-users-panel button not found');
+    }
+    
+    // ✅ EVENT 2: Icon sidebar toggle button  
+    if (toggleBtnIcon) {
+      toggleBtnIcon.addEventListener('click', () => {
+        usersPanel.classList.toggle('panel-collapsed');
+        const state = usersPanel.classList.contains('panel-collapsed') ? 'COLLAPSED' : 'EXPANDED';
+        console.log(`[ONLINE USERS] Panel toggled from ICON button → ${state}`);
+      });
+      console.log('[ONLINE USERS] ✓ Icon toggle button listener attached');
+    } else {
+      console.warn('[ONLINE USERS] ⚠ toggle-users-panel-icon button not found');
+    }
+
+    // ✅ EVENT 3: Search input
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchTerm = e.target.value.trim();
+        console.log('[ONLINE USERS] Search term updated:', this.searchTerm || '(empty)');
+        this.renderOnlineUsers();
+      });
+      console.log('[ONLINE USERS] ✓ Search input listener attached');
+    } else {
+      console.warn('[ONLINE USERS] ⚠ user-search input not found');
+    }
+
+    // Make chatApp globally accessible for inline onclick handlers
+    window.chatApp = this;
+    
+    console.log('[ONLINE USERS] ✅ All events attached successfully');
+    
+  } catch (error) {
+    console.error('[ONLINE USERS] ❌ Failed to attach events:', error.message);
+    console.error('[ONLINE USERS] Stack trace:', error.stack);
+    throw error;
+  }
+}
+
+// ==========================================
+// FUNCTION 2: setupConversationsPanel
+// PURPOSE: Initialize conversations panel with toggle and search
+// INCLUDES: Validation, initial render, toggle buttons, search
+// ==========================================
+
+setupConversationsPanel() {
+  console.log('\n[CONVERSATIONS] Setting up panel...');
+  
+  try {
+    // ✅ STEP 1: Get and validate all required elements
+    const elements = {
+      searchInput: document.getElementById('conversation-search'),
+      toggleBtn: document.getElementById('toggle-conversations-panel'),
+      toggleBtnIcon: document.getElementById('toggle-conversations-panel-icon'),
+      container: document.getElementById('conversations-list'),
+      emptyState: document.getElementById('conversations-empty-state'),
+      countBadge: document.getElementById('conversations-count'),
+      totalUnreadBadge: document.getElementById('total-unread-badge'),
+      panel: document.getElementById('conversations-panel')
+    };
+    
+    // Log validation results
+    console.log('[CONVERSATIONS] Element validation:', {
+      'conversation-search': !!elements.searchInput,
+      'toggle-conversations-panel (header)': !!elements.toggleBtn,
+      'toggle-conversations-panel-icon (sidebar)': !!elements.toggleBtnIcon,
+      'conversations-list': !!elements.container,
+      'conversations-empty-state': !!elements.emptyState,
+      'conversations-count': !!elements.countBadge,
+      'total-unread-badge': !!elements.totalUnreadBadge,
+      'conversations-panel': !!elements.panel
+    });
+    
+    // Check for missing critical elements
+    const missing = Object.entries(elements)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key);
+    
+    if (missing.length > 0) {
+      console.error('[CONVERSATIONS] ❌ Missing DOM elements:', missing);
+      throw new Error(`Missing required elements: ${missing.join(', ')}`);
+    }
+    
+    console.log('[CONVERSATIONS] ✓ All DOM elements validated');
+    
+    // ✅ STEP 2: Initial render
+    console.log('[CONVERSATIONS] Performing initial render...');
+    this.renderConversations();
+    console.log('[CONVERSATIONS] ✓ Initial render complete');
+    
+    // ✅ STEP 3: Attach search event
+    elements.searchInput.addEventListener('input', (e) => {
+      this.conversationSearchTerm = e.target.value.trim();
+      console.log('[CONVERSATIONS] Search term updated:', 
+        this.conversationSearchTerm || '(empty)');
+      this.renderConversations();
+    });
+    console.log('[CONVERSATIONS] ✓ Search event attached');
+    
+    // ✅ STEP 4: Attach desktop header toggle button
+    elements.toggleBtn.addEventListener('click', () => {
+      elements.panel.classList.toggle('panel-collapsed');
+      const state = elements.panel.classList.contains('panel-collapsed') 
+        ? 'COLLAPSED' 
+        : 'EXPANDED';
+      console.log(`[CONVERSATIONS] Panel toggled from HEADER button → ${state}`);
+    });
+    console.log('[CONVERSATIONS] ✓ Header toggle button attached');
+    
+    // ✅ STEP 5: Attach icon sidebar toggle button
+    elements.toggleBtnIcon.addEventListener('click', () => {
+      elements.panel.classList.toggle('panel-collapsed');
+      const state = elements.panel.classList.contains('panel-collapsed') 
+        ? 'COLLAPSED' 
+        : 'EXPANDED';
+      console.log(`[CONVERSATIONS] Panel toggled from ICON button → ${state}`);
+    });
+    console.log('[CONVERSATIONS] ✓ Icon toggle button attached');
+    
+    console.log('[CONVERSATIONS] ✅ Panel setup complete');
+    
+  } catch (error) {
+    console.error('[CONVERSATIONS] ❌ Setup failed:', error.message);
+    console.error('[CONVERSATIONS] Stack trace:', error.stack);
+    
+    // Show user-friendly error
+    alert('Failed to setup conversations panel. Please refresh the page.');
+    throw error;
+  }
+}
+
+// ==========================================
+// FUNCTION 3: setupResponsivePanels
+// PURPOSE: Handle mobile panels, expand buttons, badge syncing
+// INCLUDES: Desktop expand buttons, mobile overlays, badge sync
+// ==========================================
+
 setupResponsivePanels() {
   console.log('[RESPONSIVE] Setting up icon sidebar panels...');
   
-  const usersPanel = document.getElementById('users-panel');
-  const conversationsPanel = document.getElementById('conversations-panel');
-  const backdrop = document.getElementById('mobile-backdrop');
-  
-  const toggleUsersBtn = document.getElementById('toggle-users-panel');
-  const toggleUsersBtnIcon = document.getElementById('toggle-users-panel-icon');
-  
-  const toggleConversationsBtn = document.getElementById('toggle-conversations-panel');
-  const toggleConversationsBtnIcon = document.getElementById('toggle-conversations-panel-icon');
-  
-  const isMobile = () => window.innerWidth < 1024;
-  
-  // Sync collapsed badge counts with expanded counts
-  const syncBadges = () => {
-    const onlineCount = document.getElementById('online-count')?.textContent;
-    const onlineCountCollapsed = document.getElementById('online-count-collapsed');
-    if (onlineCountCollapsed && onlineCount) {
-      onlineCountCollapsed.textContent = onlineCount;
+  try {
+    // ✅ STEP 1: Get all required elements
+    const usersPanel = document.getElementById('users-panel');
+    const conversationsPanel = document.getElementById('conversations-panel');
+    const backdrop = document.getElementById('mobile-backdrop');
+    
+    const expandUsersBtn = document.getElementById('expand-users-panel');
+    const expandConversationsBtn = document.getElementById('expand-conversations-panel');
+    
+    const showUsersBtn = document.getElementById('show-users-panel-mobile');
+    const showUsersBtnIcon = document.getElementById('show-users-panel-mobile-icon');
+    const closeUsersBtn = document.getElementById('close-users-panel-mobile');
+    
+    const showConversationsBtn = document.getElementById('show-conversations-panel-mobile');
+    const closeConversationsBtn = document.getElementById('close-conversations-panel-mobile');
+    
+    // Validate critical elements
+    if (!usersPanel || !conversationsPanel) {
+      throw new Error('Critical panels not found: users-panel or conversations-panel');
     }
     
-    const totalUnread = document.getElementById('total-unread-badge')?.textContent;
-    const totalUnreadCollapsed = document.getElementById('total-unread-badge-collapsed');
-    const totalUnreadBadge = document.getElementById('total-unread-badge');
-    if (totalUnreadCollapsed && totalUnread && totalUnreadBadge) {
-      totalUnreadCollapsed.textContent = totalUnread;
-      if (!totalUnreadBadge.classList.contains('hidden')) {
-        totalUnreadCollapsed.classList.remove('hidden');
-      } else {
-        totalUnreadCollapsed.classList.add('hidden');
+    console.log('[RESPONSIVE] Element validation:', {
+      'users-panel': !!usersPanel,
+      'conversations-panel': !!conversationsPanel,
+      'mobile-backdrop': !!backdrop,
+      'expand-users-panel': !!expandUsersBtn,
+      'expand-conversations-panel': !!expandConversationsBtn,
+      'mobile buttons': !!(showUsersBtn && closeUsersBtn && showConversationsBtn && closeConversationsBtn)
+    });
+    
+    // ✅ STEP 2: Define utility functions
+    const isMobile = () => window.innerWidth < 1024;
+    
+    // Badge sync function - updates collapsed sidebar badges
+    const syncBadges = () => {
+      // Sync online count
+      const onlineCount = document.getElementById('online-count')?.textContent;
+      const onlineCountCollapsed = document.getElementById('online-count-collapsed');
+      if (onlineCountCollapsed && onlineCount) {
+        onlineCountCollapsed.textContent = onlineCount;
       }
-    }
-    
-    const userAvatar = document.getElementById('user-avatar')?.textContent;
-    const userAvatarCollapsed = document.getElementById('user-avatar-collapsed');
-    if (userAvatarCollapsed && userAvatar) {
-      userAvatarCollapsed.textContent = userAvatar;
-    }
-  };
-  
-  // Sync badges periodically
-  setInterval(syncBadges, 1000);
-  
-  // Toggle users panel (header button) - NO ICON CHANGE
-  if (toggleUsersBtn) {
-    toggleUsersBtn.addEventListener('click', () => {
-      usersPanel.classList.toggle('panel-collapsed');
-      console.log('[RESPONSIVE] Users panel toggled');
-    });
-  }
-  
-  // Toggle users panel (icon button) - NO ICON CHANGE
-  if (toggleUsersBtnIcon) {
-    toggleUsersBtnIcon.addEventListener('click', () => {
-      usersPanel.classList.toggle('panel-collapsed');
-      console.log('[RESPONSIVE] Users panel toggled from icon');
-    });
-  }
-  
-  // Toggle conversations panel (header button) - NO ICON CHANGE
-  if (toggleConversationsBtn) {
-    toggleConversationsBtn.addEventListener('click', () => {
-      conversationsPanel.classList.toggle('panel-collapsed');
-      console.log('[RESPONSIVE] Conversations panel toggled');
-    });
-  }
-  
-  // Toggle conversations panel (icon button) - NO ICON CHANGE
-  if (toggleConversationsBtnIcon) {
-    toggleConversationsBtnIcon.addEventListener('click', () => {
-      conversationsPanel.classList.toggle('panel-collapsed');
-      console.log('[RESPONSIVE] Conversations panel toggled from icon');
-    });
-  }
-  
-  // Mobile handlers
-  const showUsersBtn = document.getElementById('show-users-panel-mobile');
-  const showUsersBtnIcon = document.getElementById('show-users-panel-mobile-icon');
-  const closeUsersBtn = document.getElementById('close-users-panel-mobile');
-  
-  const showConversationsBtn = document.getElementById('show-conversations-panel-mobile');
-  const closeConversationsBtn = document.getElementById('close-conversations-panel-mobile');
-  
-  if (showUsersBtn) {
-    showUsersBtn.addEventListener('click', () => {
-      usersPanel.classList.add('panel-mobile');
-      usersPanel.classList.remove('panel-collapsed');
-      conversationsPanel.classList.add('users-hidden');
-      backdrop.classList.remove('hidden');
-    });
-  }
-  
-  if (showUsersBtnIcon) {
-    showUsersBtnIcon.addEventListener('click', () => {
-      usersPanel.classList.add('panel-mobile');
-      usersPanel.classList.remove('panel-collapsed');
-      conversationsPanel.classList.add('users-hidden');
-      backdrop.classList.remove('hidden');
-    });
-  }
-  
-  if (showConversationsBtn) {
-    showConversationsBtn.addEventListener('click', () => {
-      conversationsPanel.classList.add('panel-mobile', 'conversations-panel-mobile');
-      conversationsPanel.classList.remove('panel-collapsed');
-      backdrop.classList.remove('hidden');
-    });
-  }
-  
-  if (closeUsersBtn) {
-    closeUsersBtn.addEventListener('click', () => {
-      usersPanel.classList.add('panel-collapsed');
-      conversationsPanel.classList.remove('users-hidden');
-      backdrop.classList.add('hidden');
-    });
-  }
-  
-  if (closeConversationsBtn) {
-    closeConversationsBtn.addEventListener('click', () => {
-      conversationsPanel.classList.add('panel-collapsed');
-      backdrop.classList.add('hidden');
-    });
-  }
-  
-  if (backdrop) {
-    backdrop.addEventListener('click', () => {
-      if (isMobile()) {
-        usersPanel.classList.add('panel-collapsed');
-        conversationsPanel.classList.add('panel-collapsed');
-        conversationsPanel.classList.remove('users-hidden');
-        backdrop.classList.add('hidden');
-      }
-    });
-  }
-  
-  console.log('[RESPONSIVE] Icon sidebar panels setup complete ✓');
-}
-  async handleSend() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    const conversationId = this.state.getActiveConversationId();
-    
-    if (!text || !conversationId) return;
-    
-    try {
-      input.value = '';
       
-      this.chatService.sendTypingIndicator(
-        conversationId,
-        this.currentUser.receiverId,
-        false
-      );
-      
-      if (this.editingMessage) {
-        console.log('[SEND] Editing message:', this.editingMessage.messageId);
-        
-        const messages = this.state.getMessages(conversationId);
-        const message = messages.find(m => 
-          m.id === this.editingMessage.messageId || 
-          m.clientTempId === this.editingMessage.messageId
-        );
-        
-        if (message) {
-          message.content = text;
-          message.isEdited = true;
-          message.editedAt = new Date().toISOString();
-          
-          const messageElement = document.querySelector(`[data-message-id="${this.editingMessage.messageId}"]`);
-          if (messageElement) {
-            messageElement.remove();
-          }
-          this.renderMessage(message, false);
+      // Sync total unread count
+      const totalUnread = document.getElementById('total-unread-badge')?.textContent;
+      const totalUnreadCollapsed = document.getElementById('total-unread-badge-collapsed');
+      const totalUnreadBadge = document.getElementById('total-unread-badge');
+      if (totalUnreadCollapsed && totalUnread && totalUnreadBadge) {
+        totalUnreadCollapsed.textContent = totalUnread;
+        if (!totalUnreadBadge.classList.contains('hidden')) {
+          totalUnreadCollapsed.classList.remove('hidden');
+        } else {
+          totalUnreadCollapsed.classList.add('hidden');
         }
-        
-        this.cancelEdit();
-        this.showToast('Message edited');
-        return;
       }
       
-      const replyTo = this.replyingTo ? this.replyingTo.messageId : undefined;
+      // Sync user avatar
+      const userAvatar = document.getElementById('user-avatar')?.textContent;
+      const userAvatarCollapsed = document.getElementById('user-avatar-collapsed');
+      if (userAvatarCollapsed && userAvatar) {
+        userAvatarCollapsed.textContent = userAvatar;
+      }
       
-      console.log('[SEND] Sending message:', {
-        conversationId,
-        receiverId: this.currentUser.receiverId,
-        textLength: text.length,
-        replyTo
+      // ✅ Update expand button visibility based on panel state
+      if (expandUsersBtn) {
+        const isCollapsed = usersPanel.classList.contains('panel-collapsed');
+        expandUsersBtn.style.display = isCollapsed ? 'flex' : 'none';
+      }
+      
+      if (expandConversationsBtn) {
+        const isCollapsed = conversationsPanel.classList.contains('panel-collapsed');
+        expandConversationsBtn.style.display = isCollapsed ? 'flex' : 'none';
+      }
+    };
+    
+    // ✅ STEP 3: Attach desktop expand button events
+    if (expandUsersBtn) {
+      expandUsersBtn.addEventListener('click', () => {
+        usersPanel.classList.remove('panel-collapsed');
+        syncBadges();
+        console.log('[RESPONSIVE] Users panel EXPANDED from header button');
       });
-      
-      await this.chatService.sendTextMessage(
-        conversationId,
-        text,
-        this.currentUser.receiverId,
-        replyTo
-      );
-      
-      if (this.replyingTo) {
-        this.cancelReply();
-      }
-      
-      console.log('[SEND] Message sent successfully');
-      
-    } catch (error) {
-      console.error('[SEND] Failed to send message:', error);
-      input.value = text;
-      this.showErrorNotification('Failed to send message: ' + error.message);
+      console.log('[RESPONSIVE] ✓ Expand users button attached');
     }
+    
+    if (expandConversationsBtn) {
+      expandConversationsBtn.addEventListener('click', () => {
+        conversationsPanel.classList.remove('panel-collapsed');
+        syncBadges();
+        console.log('[RESPONSIVE] Conversations panel EXPANDED from header button');
+      });
+      console.log('[RESPONSIVE] ✓ Expand conversations button attached');
+    }
+    
+    // ✅ STEP 4: Attach mobile show/hide events for USERS panel
+    if (showUsersBtn) {
+      showUsersBtn.addEventListener('click', () => {
+        usersPanel.classList.add('panel-mobile');
+        usersPanel.classList.remove('panel-collapsed');
+        conversationsPanel.classList.add('users-hidden');
+        if (backdrop) backdrop.classList.remove('hidden');
+        console.log('[RESPONSIVE] Users panel opened (mobile)');
+      });
+    }
+    
+    if (showUsersBtnIcon) {
+      showUsersBtnIcon.addEventListener('click', () => {
+        usersPanel.classList.add('panel-mobile');
+        usersPanel.classList.remove('panel-collapsed');
+        conversationsPanel.classList.add('users-hidden');
+        if (backdrop) backdrop.classList.remove('hidden');
+        console.log('[RESPONSIVE] Users panel opened from icon (mobile)');
+      });
+    }
+    
+    if (closeUsersBtn) {
+      closeUsersBtn.addEventListener('click', () => {
+        usersPanel.classList.add('panel-collapsed');
+        conversationsPanel.classList.remove('users-hidden');
+        if (backdrop) backdrop.classList.add('hidden');
+        console.log('[RESPONSIVE] Users panel closed (mobile)');
+      });
+    }
+    
+    // ✅ STEP 5: Attach mobile show/hide events for CONVERSATIONS panel
+    if (showConversationsBtn) {
+      showConversationsBtn.addEventListener('click', () => {
+        conversationsPanel.classList.add('panel-mobile', 'conversations-panel-mobile');
+        conversationsPanel.classList.remove('panel-collapsed');
+        if (backdrop) backdrop.classList.remove('hidden');
+        console.log('[RESPONSIVE] Conversations panel opened (mobile)');
+      });
+    }
+    
+    if (closeConversationsBtn) {
+      closeConversationsBtn.addEventListener('click', () => {
+        conversationsPanel.classList.add('panel-collapsed');
+        if (backdrop) backdrop.classList.add('hidden');
+        console.log('[RESPONSIVE] Conversations panel closed (mobile)');
+      });
+    }
+    
+    // ✅ STEP 6: Backdrop click handler
+    if (backdrop) {
+      backdrop.addEventListener('click', () => {
+        if (isMobile()) {
+          usersPanel.classList.add('panel-collapsed');
+          conversationsPanel.classList.add('panel-collapsed');
+          conversationsPanel.classList.remove('users-hidden');
+          backdrop.classList.add('hidden');
+          console.log('[RESPONSIVE] All panels closed via backdrop');
+        }
+      });
+      console.log('[RESPONSIVE] ✓ Backdrop click handler attached');
+    }
+    
+    // ✅ STEP 7: Setup periodic badge sync
+    setInterval(syncBadges, 100);
+    
+    // ✅ STEP 8: Initial sync
+    syncBadges();
+    
+    console.log('[RESPONSIVE] ✅ Icon sidebar panels setup complete');
+    
+  } catch (error) {
+    console.error('[RESPONSIVE] ❌ Setup failed:', error.message);
+    console.error('[RESPONSIVE] Stack trace:', error.stack);
+    throw error;
   }
+}
+
+// Also update the setupResponsivePanels method - remove ALL text content changes:
+
+
+
 
   // ==========================================
   // PHASE 3.1 + 3.2: ENHANCED MESSAGE DISPLAY
