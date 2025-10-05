@@ -31,6 +31,7 @@ export interface IMessageService {
       replyTo?: string;
       attachments?: Attachment[];
       metadata?: Record<string, any>;
+      clientTempId?: string;  // ✅ ADDED THIS LINE
     }
   ): Promise<Message>;
 
@@ -38,7 +39,8 @@ export interface IMessageService {
     conversationId: string,
     file: any,
     type: AttachmentType,
-    receiverId: string
+    receiverId: string,
+    clientTempId?: string  // ✅ ADDED THIS PARAMETER
   ): Promise<Message>;
 
   // Fetch operations

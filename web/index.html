@@ -468,24 +468,102 @@
         </div>
       </div>
 
-      <!-- Input Container -->
-      <div class="bg-white border-t border-gray-200 px-4 lg:px-6 py-4 flex gap-3">
-        <input 
-          type="text" 
-          id="message-input" 
-          placeholder="Type a message..."
-          class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        />
-        <button 
-          id="send-btn" 
-          class="px-4 lg:px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
-          </svg>
-        </button>
+      <!-- Input Container with File Upload -->
+      <div class="bg-white border-t border-gray-200 px-4 lg:px-6 py-4">
+        
+        <!-- File Preview -->
+        <div id="file-preview" class="hidden mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+          <div id="file-preview-icon" class="flex-shrink-0"></div>
+          <div class="flex-1 min-w-0">
+            <div id="file-preview-name" class="text-sm font-medium text-gray-800 truncate"></div>
+            <div id="file-preview-size" class="text-xs text-gray-500"></div>
+          </div>
+          <button id="remove-file-btn" class="flex-shrink-0 p-1 hover:bg-blue-100 rounded transition-colors" title="Remove file">
+            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Upload Progress -->
+        <div id="upload-progress" class="hidden mb-3"></div>
+        
+        <!-- Input Row -->
+        <div class="flex gap-3">
+          
+          <!-- Hidden File Input -->
+          <input 
+            type="file" 
+            id="file-input" 
+            class="hidden" 
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
+          />
+          
+          <!-- Attach File Button -->
+          <button 
+            id="attach-file-btn" 
+            class="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            title="Attach file"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+          
+          <!-- Message Input -->
+          <input 
+            type="text" 
+            id="message-input" 
+            placeholder="Type a message..."
+            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          
+          <!-- Send Button -->
+          <button 
+            id="send-btn" 
+            class="px-4 lg:px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center flex-shrink-0"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 10L18 2L10 18L9 12L2 10Z"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </main>
   </div>
 
+
+  <!-- Image Viewer Modal -->
+<div id="image-viewer-modal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4">
+  <button 
+    onclick="window.chatApp.closeImageViewer()" 
+    class="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+  >
+    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  </button>
+  
+  <div class="max-w-6xl max-h-full flex flex-col items-center">
+    <img 
+      id="viewer-image" 
+      src="" 
+      alt="" 
+      class="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+    />
+    <div id="viewer-filename" class="mt-4 text-white text-sm"></div>
+    <a 
+      id="viewer-download" 
+      href="" 
+      download="" 
+      class="mt-4 px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
+    >
+      Download Image
+    </a>
+  </div>
+</div>
+
+
   <script type="module" src="./app.js"></script>
+</body>
+</html>

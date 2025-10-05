@@ -1241,3 +1241,4 @@ export interface OnlineUsersStats {
 export interface OnlineUsersByRole {
   [role: string]: OnlineUser[];
 }
+

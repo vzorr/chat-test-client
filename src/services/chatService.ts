@@ -37,7 +37,8 @@ import {
   NetworkException,
   AuthException,
   UploadFileResponse,
-  OnlineUser
+  OnlineUser,
+  Attachment
 } from '../types/chat';
 
 // Import store types
@@ -219,61 +220,100 @@ class ChatService {
     );
   }
 
+
   private setupEventListeners(): void {
-    // Connection state changes
-    const connectionCleanup = this.realtimeService.onConnectionChange((state) => {
-      console.log('📡 Connection state changed:', state);
-      this.safeDispatch(this.reduxActions.setConnectionState(state));
-      
-      // Process offline queue when reconnected
-      if (state === ConnectionState.CONNECTED && this.offlineQueueService.getQueueSize() > 0) {
-        this.offlineQueueService.processQueue();
-      }
-    });
-    this.eventCleanupFunctions.push(connectionCleanup);
+  // Connection state changes
+  const connectionCleanup = this.realtimeService.onConnectionChange((state) => {
+    console.log('📡 Connection state changed:', state);
+    this.safeDispatch(this.reduxActions.setConnectionState(state));
+    
+    // Process offline queue when reconnected
+    if (state === ConnectionState.CONNECTED && this.offlineQueueService.getQueueSize() > 0) {
+      this.offlineQueueService.processQueue();
+    }
+  });
+  this.eventCleanupFunctions.push(connectionCleanup);
 
-    // New messages
-    const messageCleanup = this.realtimeService.onMessage((message) => {
-      console.log('💬 New message received:', message.id);
-      
-      // Cache the message
-      this.cacheService.cacheMessage(message.conversationId, message);
+  // New messages
+  const messageCleanup = this.realtimeService.onMessage((message) => {
+    console.log('💬 New message received:', message.id);
+    
+    // Cache the message
+    this.cacheService.cacheMessage(message.conversationId, message);
 
-      // Update Redux for incoming messages
-      if (message.senderId !== this.userId) {
-        const conversation = this.cacheService.getCachedConversation(message.conversationId);
-        this.safeDispatch(this.reduxActions.handleNewMessage({
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          messagePreview: message.content.substring(0, 50),
-          timestamp: message.timestamp,
-          otherUserName: this.getOtherUserName(conversation),
-          jobTitle: conversation?.metadata?.jobTitle
-        }));
-      }
-    });
-    this.eventCleanupFunctions.push(messageCleanup);
-
-    // Message sent confirmations
-    const sentCleanup = this.realtimeService.onMessageSent((data) => {
-      console.log('✅ Message sent:', data.messageId);
-      
-      // Remove from offline queue if exists
-      if (data.clientTempId) {
-        this.offlineQueueService.removeFromQueue(data.clientTempId);
-      }
-    });
-    this.eventCleanupFunctions.push(sentCleanup);
-
-    // Typing indicators
-    const typingCleanup = this.realtimeService.onTyping((data) => {
-      this.safeDispatch(this.reduxActions.updateTypingUsers({
-        conversationId: data.conversationId,
-        typingUserIds: data.isTyping ? [data.userId] : []
+    // Update Redux for incoming messages
+    if (message.senderId !== this.userId) {
+      const conversation = this.cacheService.getCachedConversation(message.conversationId);
+      this.safeDispatch(this.reduxActions.handleNewMessage({
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        messagePreview: message.content.substring(0, 50),
+        timestamp: message.timestamp,
+        otherUserName: this.getOtherUserName(conversation),
+        jobTitle: conversation?.metadata?.jobTitle
       }));
+    }
+  });
+  this.eventCleanupFunctions.push(messageCleanup);
+
+  // ✅ UPDATED: Message sent confirmations
+  const sentCleanup = this.realtimeService.onMessageSent((data) => {
+    console.log('✅ Message sent confirmation:', {
+      messageId: data.messageId,
+      clientTempId: data.clientTempId,
+      conversationId: data.conversationId,
+      status: data.status
     });
-    this.eventCleanupFunctions.push(typingCleanup);
-  }
+    
+    // ✅ NEW: Handle clientTempId matching for optimistic updates
+    if (data.clientTempId && data.conversationId) {
+      // Find the optimistic/temp message
+      const cachedMessages = this.cacheService.getCachedMessages(data.conversationId);
+      const tempMessage = cachedMessages.find(m => 
+        m.clientTempId === data.clientTempId && 
+        (m.status === MessageStatus.SENDING || m.status === MessageStatus.QUEUED)
+      );
+      
+      if (tempMessage) {
+        console.log('✅ Updating temp message:', {
+          oldId: tempMessage.id,
+          newId: data.messageId,
+          clientTempId: data.clientTempId
+        });
+        
+        // Update the message with server ID and status
+        const updatedMessage: Message = {
+          ...tempMessage,
+          id: data.messageId,
+          status: MessageStatus.SENT,
+          //timestamp: data.timestamp || tempMessage.timestamp
+        };
+        
+        // Update in cache
+        this.cacheService.cacheMessage(data.conversationId, updatedMessage);
+        
+        console.log('✅ Temp message updated to SENT');
+      } else {
+        console.warn('⚠️ No temp message found for clientTempId:', data.clientTempId);
+      }
+    }
+    
+    // Remove from offline queue if exists
+    if (data.clientTempId) {
+      this.offlineQueueService.removeFromQueue(data.clientTempId);
+    }
+  });
+  this.eventCleanupFunctions.push(sentCleanup);
+
+  // Typing indicators (unchanged)
+  const typingCleanup = this.realtimeService.onTyping((data) => {
+    this.safeDispatch(this.reduxActions.updateTypingUsers({
+      conversationId: data.conversationId,
+      typingUserIds: data.isTyping ? [data.userId] : []
+    }));
+  });
+  this.eventCleanupFunctions.push(typingCleanup);
+}
 
   // ==========================================
   // CONVERSATION METHODS (delegating to ConversationService)
@@ -438,6 +478,7 @@ class ChatService {
     return this.messageService.sendMessage(conversationId, text, receiverId, { replyTo });
   }
 
+  
   async sendAttachment(
     conversationId: string,
     file: any,
@@ -458,6 +499,219 @@ class ChatService {
     await this.messageService.markAsRead(conversationId, messageIds);
     this.safeDispatch(this.reduxActions.markConversationAsRead(conversationId));
   }
+
+
+  // Add to ChatService.ts after sendAttachment method (around line 430)
+
+  /**
+ * Helper: Determine message type from MIME type
+ * @private
+ */
+private getMessageTypeFromMime(mimeType: string): MessageType {
+  const mime = mimeType.toLowerCase();
+  
+  if (mime.startsWith('image/')) {
+    return MessageType.IMAGE;
+  }
+  
+  if (mime.startsWith('video/')) {
+    return MessageType.VIDEO;
+  }
+  
+  if (mime.startsWith('audio/')) {
+    return MessageType.AUDIO;
+  }
+  
+  // Default to FILE type
+  return MessageType.FILE;
+}
+
+
+/**
+ * Send a message with an already-uploaded file attachment
+ * Use this when the file has been uploaded separately and you have the URL
+ * 
+ * @param conversationId - The conversation ID
+ * @param fileUrl - The uploaded file URL (e.g., "/uploads/images/abc123.png")
+ * @param fileName - Original filename
+ * @param fileSize - File size in bytes
+ * @param fileType - MIME type (e.g., "image/png")
+ * @param receiverId - Recipient user ID
+ * @param caption - Optional text caption
+ * @param replyTo - Optional message ID to reply to
+ * @param clientTempId - Optional client-side temporary ID for optimistic updates
+ * @returns Promise<Message> - The sent message
+ */
+async sendFileMessage(
+  conversationId: string,
+  fileUrl: string,
+  fileName: string,
+  fileSize: number,
+  fileType: string,
+  receiverId: string,
+  caption?: string,
+  replyTo?: string,
+  clientTempId?: string  // ✅ ADDED THIS PARAMETER
+): Promise<Message> {
+  this.checkInitialized();
+  
+  // Validate inputs
+  if (!conversationId?.trim()) {
+    throw new ValidationException('Conversation ID is required');
+  }
+  if (!fileUrl?.trim()) {
+    throw new ValidationException('File URL is required');
+  }
+  if (!fileName?.trim()) {
+    throw new ValidationException('File name is required');
+  }
+  if (!receiverId?.trim()) {
+    throw new ValidationException('Receiver ID is required');
+  }
+  if (fileSize <= 0) {
+    throw new ValidationException('File size must be positive');
+  }
+  
+  // Check connection state
+  const connectionState = this.realtimeService.getConnectionState();
+  
+  // ✅ Use provided clientTempId or generate new one
+  const tempId = clientTempId || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const messageId = uuidv4();
+  
+  // Create attachment object
+  const attachment: Attachment = {
+    id: uuidv4(),
+    url: fileUrl,
+    name: fileName,
+    size: fileSize,
+    type: this.getAttachmentTypeFromMime(fileType),
+    mimeType: fileType
+  };
+  
+  // Determine message type from MIME type
+  const messageType = this.getMessageTypeFromMime(fileType);
+  
+  // Create message object
+  const message: Message = {
+    id: messageId,
+    clientTempId: tempId,  // ✅ Use the tempId
+    senderId: this.userId,
+    receiverId,
+    content: caption || `Sent ${fileName}`,
+    timestamp: new Date().toISOString(),
+    type: messageType,
+    status: MessageStatus.SENDING,
+    attachments: [attachment],
+    replyTo: replyTo || undefined,
+    conversationId,
+    jobId: undefined
+  };
+  
+  console.log('[ChatService] Sending file message:', {
+    conversationId,
+    fileName,
+    fileSize,
+    fileType: fileType,
+    messageType,
+    hasCaption: !!caption,
+    clientTempId: tempId  // ✅ Log it
+  });
+  
+  // If offline, queue the message
+  if (connectionState === ConnectionState.DISCONNECTED || 
+      connectionState === ConnectionState.ERROR) {
+    console.log('[ChatService] Offline - queuing file message');
+    message.status = MessageStatus.QUEUED;
+    await this.offlineQueueService.queueMessage(message);
+    
+    // Cache for local display
+    this.cacheService.cacheMessage(conversationId, message);
+    
+    return message;
+  }
+  
+  // Cache immediately for optimistic UI
+  this.cacheService.cacheMessage(conversationId, message);
+  
+  // Send via message service
+  try {
+    // ✅ Pass clientTempId through options
+    const sentMessage = await this.messageService.sendMessage(
+      conversationId,
+      caption || '',
+      receiverId,
+      {
+        replyTo,
+        attachments: [attachment],
+        clientTempId: tempId,  // ✅ CRITICAL: Pass it here
+        metadata: {
+          originalFileName: fileName,
+          fileType: fileType
+        }
+      }
+    );
+    
+    // Update cache with server response
+    const finalMessage: Message = {
+      ...message,
+      ...sentMessage,
+      status: MessageStatus.SENT,
+      attachments: [attachment], // Preserve attachment info
+      clientTempId: tempId  // ✅ Keep clientTempId for matching
+    };
+    
+    this.cacheService.cacheMessage(conversationId, finalMessage);
+    
+    console.log('[ChatService] File message sent successfully:', sentMessage.id);
+    
+    return finalMessage;
+    
+  } catch (error) {
+    console.error('[ChatService] Failed to send file message:', error);
+    
+    // Update status to failed
+    message.status = MessageStatus.FAILED;
+    this.cacheService.cacheMessage(conversationId, message);
+    
+    // Rethrow for caller to handle
+    throw error;
+  }
+}
+
+/**
+ * Helper: Determine attachment type from MIME type
+ * @private
+ */
+private getAttachmentTypeFromMime(mimeType: string): AttachmentType {
+  const mime = mimeType.toLowerCase();
+  
+  if (mime.startsWith('image/')) {
+    return AttachmentType.IMAGE;
+  }
+  
+  if (mime.startsWith('video/')) {
+    return AttachmentType.VIDEO;
+  }
+  
+  if (mime.startsWith('audio/')) {
+    return AttachmentType.AUDIO;
+  }
+  
+  // Check for document types
+  if (mime.includes('pdf') || 
+      mime.includes('document') || 
+      mime.includes('word') || 
+      mime.includes('excel') ||
+      mime.includes('sheet') ||
+      mime.includes('text')) {
+    return AttachmentType.DOCUMENT;
+  }
+  
+  // Default to FILE
+  return AttachmentType.FILE;
+}
+
 
   async retryFailedMessage(
     conversationId: string,

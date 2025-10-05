@@ -3,6 +3,7 @@ console.log('========================================');
 console.log('APP.JS LOADING STARTED');
 console.log('========================================');
 
+
 // ==========================================
 // DYNAMIC IMPORTS
 // ==========================================
@@ -21,7 +22,7 @@ async function loadModules() {
     const typesModule = await import('../src/types/chat');
     const { ConnectionState, MessageStatus } = typesModule;
     console.log('  Types loaded');
-    
+        
     console.log('\n[STEP 1] All modules loaded!\n');
     
     return { chatService, AuthService, ConnectionState, MessageStatus };
@@ -31,6 +32,9 @@ async function loadModules() {
     throw error;
   }
 }
+
+import { FileUploadManager } from './managers/FileUploadManager.js';
+
 
 // ==========================================
 // USER PROFILES
@@ -326,9 +330,13 @@ getSortedConversations() {
 // CHAT APP CLASS
 // ==========================================
 class ChatApp {
+  
   constructor(modules) {
     console.log('\n[STEP 2] Initializing ChatApp...');
     
+    // ==========================================
+    // CORE MODULES
+    // ==========================================
     this.chatService = modules.chatService;
     this.AuthService = modules.AuthService;
     this.ConnectionState = modules.ConnectionState;
@@ -336,25 +344,74 @@ class ChatApp {
     
     console.log('  Modules assigned to ChatApp');
     
+    // ==========================================
+    // STATE MANAGER
+    // ==========================================
     this.state = new ConversationStateManager();
     console.log('  State manager initialized');
+
+    // ==========================================
+    // FILE UPLOAD MANAGER
+    // ==========================================
+    this.fileManager = new FileUploadManager(
+      'https://myusta.al/chat-backend',
+      () => this.currentUser?.token || ''
+    );
+    window.fileManager = this.fileManager; // Make globally accessible
+    console.log('  File manager initialized');
     
+    // ==========================================
+    // USER & CONVERSATION STATE
+    // ==========================================
     this.currentUser = null;
     this.jobId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
     this.jobTitle = 'Service Request';
+    
+    // ==========================================
+    // SEARCH FILTERS
+    // ==========================================
     this.searchTerm = '';
     this.conversationSearchTerm = '';
+    
+    // ==========================================
+    // SYSTEM FLAGS
+    // ==========================================
     this.isInitializing = false;
     
-    // Phase 3.1 + 3.2 properties
+    // ==========================================
+    // MESSAGE INTERACTION STATE (Phase 3.1 + 3.2)
+    // ==========================================
     this.replyingTo = null;
     this.editingMessage = null;
     
+    // ==========================================
+    // FILE UPLOAD STATE
+    // ==========================================
+    this.selectedFile = null;
+
     console.log('  State initialized');
     console.log('  Job ID:', this.jobId);
     
+    // ==========================================
+    // START INITIALIZATION
+    // ==========================================
     this.init();
   }
+
+  init() {
+    console.log('\n[STEP 3] Starting UI initialization...');
+    this.renderUserSelection();
+    console.log('  User selection rendered');
+    
+    this.attachRoleSelectionEvents();
+    console.log('  Events attached');
+    
+    console.log('\n[STEP 3] ChatApp initialization complete!');
+    console.log('========================================');
+    console.log('APPLICATION READY - Select a user to continue');
+    console.log('========================================\n');
+  }
+
 
   init() {
     console.log('\n[STEP 3] Starting UI initialization...');
@@ -455,7 +512,14 @@ class ChatApp {
   }
 
 
+// ==========================================
+// COMPLETE connectToChat METHOD
+// ==========================================
+
 async connectToChat() {
+  // ==========================================
+  // PREVENT DUPLICATE INITIALIZATION
+  // ==========================================
   if (this.isInitializing) {
     console.log('[CONNECT] Already initializing, skipping...');
     return;
@@ -466,23 +530,42 @@ async connectToChat() {
   try {
     console.log('\n[CONNECT] Establishing chat connection...');
     
+    // ==========================================
+    // WAIT FOR DOM TO BE READY
+    // ==========================================
     await this.waitForDOM();
     
+    // ==========================================
+    // LOG CURRENT USER INFO
+    // ==========================================
     console.log('  Current user:', this.currentUser.name);
     console.log('  User ID:', this.currentUser.userData.id || this.currentUser.id);
     console.log('  Role:', this.currentUser.role);
     console.log('  Has token:', !!this.currentUser.token);
     
+    // ==========================================
+    // SWITCH UI FROM LOGIN TO CHAT
+    // ==========================================
     document.getElementById('role-selection').classList.add('hidden');
     document.getElementById('chat-interface').classList.remove('hidden');
 
+    // ==========================================
+    // SET USER PROFILE IN HEADER
+    // ==========================================
     document.getElementById('user-avatar').textContent = this.currentUser.name.charAt(0);
     document.getElementById('user-name').textContent = this.currentUser.name;
     document.getElementById('user-role').textContent = this.currentUser.role.toUpperCase();
+    
+    // ==========================================
+    // UPDATE CONNECTION STATUS
+    // ==========================================
     this.updateConnectionStatus('connecting', 'Connecting...');
 
     console.log('\n[CONNECT] Initializing chat service...');
     
+    // ==========================================
+    // INITIALIZE CHAT SERVICE WITH USER DATA
+    // ==========================================
     await this.chatService.initialize(
       this.currentUser.userData.id || this.currentUser.id,
       this.currentUser.role,
@@ -500,34 +583,64 @@ async connectToChat() {
 
     console.log('  ✓ chatService initialized');
 
+    // ==========================================
+    // SETUP SOCKET EVENT LISTENERS
+    // ==========================================
     this.setupEventListeners();
     console.log('  ✓ Event listeners attached');
     
+    // ==========================================
+    // SETUP ONLINE USERS PANEL
+    // ==========================================
     this.setupOnlineUsersPanel();
     console.log('  ✓ Online users panel setup');
     
+    // ==========================================
+    // SETUP CONVERSATIONS PANEL
+    // ==========================================
     this.setupConversationsPanel();
     console.log('  ✓ Conversations panel setup');
     
+    // ==========================================
+    // SETUP INITIAL CONVERSATION STATE
+    // ==========================================
     await this.setupConversation();
     console.log('  ✓ Initial conversation setup');
     
+    // ==========================================
+    // ATTACH INPUT EVENTS (includes file upload)
+    // ==========================================
     this.attachInputEvents();
     console.log('  ✓ Input events attached');
     
+    // ==========================================
+    // ATTACH PANEL TOGGLE EVENTS
+    // ==========================================
     this.attachOnlineUsersPanelEvents();
     console.log('  ✓ Panel events attached');
 
+    // ==========================================
+    // SETUP RESPONSIVE PANELS (mobile/desktop)
+    // ==========================================
     this.setupResponsivePanels();
     console.log('  ✓ Responsive panels setup');
 
-    // ✅ LOAD ALL CONVERSATIONS AFTER CONNECTION
+    // ==========================================
+    // LOAD ALL EXISTING CONVERSATIONS
+    // ==========================================
     await this.loadAllConversations();
+    console.log('  ✓ Conversations loaded');
 
+    // ==========================================
+    // UPDATE CONNECTION STATUS TO CONNECTED
+    // ==========================================
     this.updateConnectionStatus('connected', 'Connected');
     console.log('\n[CONNECT] Chat connected successfully!\n');
 
   } catch (error) {
+    // ==========================================
+    // ERROR HANDLING
+    // ==========================================
     console.error('[CONNECT] Connection failed:', error);
     console.error('Full error stack:', error.stack);
     
@@ -536,6 +649,9 @@ async connectToChat() {
     const errorMsg = `Failed to connect: ${error.message}\n\nCheck console for details.`;
     alert(errorMsg);
     
+    // ==========================================
+    // REVERT UI BACK TO LOGIN SCREEN
+    // ==========================================
     document.getElementById('chat-interface').classList.add('hidden');
     document.getElementById('role-selection').classList.remove('hidden');
     
@@ -544,9 +660,178 @@ async connectToChat() {
     connectBtn.disabled = false;
     
   } finally {
+    // ==========================================
+    // RESET INITIALIZATION FLAG
+    // ==========================================
     this.isInitializing = false;
   }
 }
+
+// ==========================================
+// HELPER METHOD: waitForDOM
+// ==========================================
+async waitForDOM() {
+  console.log('[DOM] Waiting for DOM to be ready...');
+  
+  return new Promise((resolve) => {
+    if (document.readyState === 'complete') {
+      console.log('[DOM] DOM already ready');
+      resolve();
+      return;
+    }
+    
+    window.addEventListener('load', () => {
+      console.log('[DOM] DOM load complete');
+      resolve();
+    });
+  });
+}
+
+// ==========================================
+// HELPER METHOD: loadAllConversations
+// ==========================================
+async loadAllConversations() {
+  console.log('\n[LOAD CONVERSATIONS] Loading all conversations...');
+  
+  try {
+    const conversationsList = document.getElementById('conversations-list');
+    const emptyState = document.getElementById('conversations-empty-state');
+    
+    // ==========================================
+    // HIDE EMPTY STATE & SHOW LOADING
+    // ==========================================
+    if (emptyState) {
+      emptyState.classList.add('hidden');
+    }
+    
+    if (conversationsList) {
+      conversationsList.innerHTML = `
+        <div class="flex items-center justify-center py-12">
+          <div class="text-center text-gray-500">
+            <div class="animate-spin w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full mx-auto mb-2"></div>
+            <p class="text-sm">Loading conversations...</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // ==========================================
+    // FETCH CONVERSATIONS FROM API
+    // ==========================================
+    const response = await fetch('https://myusta.al/chat-backend/api/v1/conversations', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.currentUser.token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load conversations: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    console.log('[LOAD CONVERSATIONS] Response received:', {
+      success: data.success,
+      conversationCount: data.conversations?.length || 0
+    });
+    
+    if (!data.success || !data.conversations) {
+      throw new Error('Invalid response format from conversations API');
+    }
+    
+    // ==========================================
+    // ADD CONVERSATIONS TO STATE MANAGER
+    // ==========================================
+    data.conversations.forEach(conv => {
+      console.log('[LOAD CONVERSATIONS] Adding conversation to state:', {
+        id: conv.id,
+        participantCount: conv.participants?.length || 0,
+        hasLastMessage: !!conv.lastMessage
+      });
+      
+      this.state.addConversation(conv);
+    });
+    
+    console.log(`[LOAD CONVERSATIONS] Added ${data.conversations.length} conversations to state`);
+    
+    // ==========================================
+    // RENDER CONVERSATIONS IN UI
+    // ==========================================
+    this.renderConversations();
+    
+    console.log('[LOAD CONVERSATIONS] Conversations loaded successfully');
+    
+  } catch (error) {
+    // ==========================================
+    // ERROR HANDLING
+    // ==========================================
+    console.error('[LOAD CONVERSATIONS] Failed to load conversations:', error);
+    console.error('[LOAD CONVERSATIONS] Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    
+    const conversationsList = document.getElementById('conversations-list');
+    const emptyState = document.getElementById('conversations-empty-state');
+    
+    // ==========================================
+    // SHOW ERROR STATE WITH RETRY BUTTON
+    // ==========================================
+    if (conversationsList) {
+      conversationsList.innerHTML = `
+        <div class="flex items-center justify-center py-12 px-4">
+          <div class="text-center text-red-500">
+            <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-sm font-medium mb-2">Failed to load conversations</p>
+            <p class="text-xs text-gray-600 mb-3">${this.escapeHtml(error.message)}</p>
+            <button onclick="window.chatApp.loadAllConversations()" class="px-3 py-1.5 bg-purple-500 text-white text-sm rounded hover:bg-purple-600">
+              Retry
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    if (emptyState) {
+      emptyState.classList.add('hidden');
+    }
+  }
+}
+
+// ==========================================
+// HELPER METHOD: setupConversation
+// ==========================================
+async setupConversation() {
+  console.log('Initial setup - no automatic conversation creation');
+  console.log('User can select from online users or existing conversations');
+  
+  const container = document.getElementById('messages-container');
+  const emptyState = document.getElementById('chat-empty-state');
+  
+  if (emptyState) {
+    emptyState.classList.remove('hidden');
+  }
+  
+  // ==========================================
+  // SHOW EMPTY STATE IN MESSAGES AREA
+  // ==========================================
+  container.innerHTML = `
+    <div class="flex items-center justify-center h-full">
+      <div class="text-center text-gray-500">
+        <svg class="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <p class="text-lg font-medium mb-2">Select a user or conversation to start chatting</p>
+        <p class="text-sm">Choose from your conversations or start a new one with an online user</p>
+      </div>
+    </div>
+  `;
+}
+
 
 async loadAllConversations() {
   console.log('\n[LOAD CONVERSATIONS] Loading all conversations...');
@@ -1864,44 +2149,123 @@ async startConversationWithUser(user) {
 
 
 
-  attachInputEvents() {
-    const input = document.getElementById('message-input');
-    const sendBtn = document.getElementById('send-btn');
+attachInputEvents() {
+  const input = document.getElementById('message-input');
+  const sendBtn = document.getElementById('send-btn');
+  const fileInput = document.getElementById('file-input');
+  const attachBtn = document.getElementById('attach-file-btn');
+  const removeFileBtn = document.getElementById('remove-file-btn');
 
-    let typingTimeout;
+  let typingTimeout;
 
-    input.addEventListener('input', () => {
-      const conversationId = this.state.getActiveConversationId();
-      if (conversationId) {
+  // ==========================================
+  // MESSAGE INPUT TYPING INDICATOR
+  // ==========================================
+  input.addEventListener('input', () => {
+    const conversationId = this.state.getActiveConversationId();
+    if (conversationId) {
+      this.chatService.sendTypingIndicator(
+        conversationId,
+        this.currentUser.receiverId,
+        true
+      );
+
+      clearTimeout(typingTimeout);
+
+      typingTimeout = setTimeout(() => {
         this.chatService.sendTypingIndicator(
           conversationId,
           this.currentUser.receiverId,
-          true
+          false
         );
+      }, 3000);
+    }
+  });
 
-        clearTimeout(typingTimeout);
+  // ==========================================
+  // MESSAGE INPUT ENTER KEY
+  // ==========================================
+  input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      this.handleSendWithFile();
+    }
+  });
 
-        typingTimeout = setTimeout(() => {
-          this.chatService.sendTypingIndicator(
-            conversationId,
-            this.currentUser.receiverId,
-            false
-          );
-        }, 3000);
-      }
+  // ==========================================
+  // SEND BUTTON
+  // ==========================================
+  sendBtn.addEventListener('click', () => {
+    this.handleSendWithFile();
+  });
+
+  // ==========================================
+  // FILE UPLOAD: ATTACH BUTTON
+  // ==========================================
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => {
+      console.log('[FILE UPLOAD] Attach button clicked');
+      fileInput.click();
     });
-
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.handleSend();
-      }
-    });
-
-    sendBtn.addEventListener('click', () => {
-      this.handleSend();
+    console.log('[FILE UPLOAD] Attach button event listener added');
+  } else {
+    console.error('[FILE UPLOAD] Missing elements:', {
+      attachBtn: !!attachBtn,
+      fileInput: !!fileInput
     });
   }
+
+  // ==========================================
+  // FILE UPLOAD: FILE SELECTED
+  // ==========================================
+  if (fileInput) {
+    fileInput.addEventListener('change', async (e) => {
+      console.log('[FILE UPLOAD] File input change event fired');
+      const file = e.target.files?.[0];
+      
+      if (!file) {
+        console.log('[FILE UPLOAD] No file selected');
+        return;
+      }
+      
+      console.log('[FILE UPLOAD] File selected:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+      
+      // Validate file
+      const validation = this.fileManager.validateFile(file);
+      if (!validation.valid) {
+        console.error('[FILE UPLOAD] Validation failed:', validation.error);
+        this.showToast(validation.error, 'error');
+        fileInput.value = '';
+        return;
+      }
+      
+      console.log('[FILE UPLOAD] File validated successfully');
+      this.selectedFile = file;
+      this.showFilePreview(file);
+      
+      // Clear file input
+      fileInput.value = '';
+    });
+    console.log('[FILE UPLOAD] File input event listener added');
+  }
+
+  // ==========================================
+  // FILE UPLOAD: REMOVE FILE BUTTON
+  // ==========================================
+  if (removeFileBtn) {
+    removeFileBtn.addEventListener('click', () => {
+      console.log('[FILE UPLOAD] Remove file button clicked');
+      this.clearFilePreview();
+    });
+    console.log('[FILE UPLOAD] Remove file button event listener added');
+  }
+  
+  console.log('[INPUT EVENTS] All input events attached (including file upload)');
+}
 
   // Find the setupConversationsPanel method and replace the toggle event section:
 
@@ -2260,6 +2624,349 @@ setupResponsivePanels() {
   }
 }
 
+
+// ==========================================
+// FILE UPLOAD FUNCTIONALITY
+// ==========================================
+
+attachFileUploadEvents() {
+  console.log('[FILE UPLOAD] Attaching file upload events...');
+  
+  const fileInput = document.getElementById('file-input');
+  const attachBtn = document.getElementById('attach-file-btn');
+  const removeFileBtn = document.getElementById('remove-file-btn');
+  
+  // Attach file button click
+  if (attachBtn) {
+    attachBtn.addEventListener('click', () => {
+      fileInput?.click();
+    });
+  }
+  
+  // File selected
+  if (fileInput) {
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      // Validate file
+      const validation = this.fileManager.validateFile(file);
+      if (!validation.valid) {
+        this.showToast(validation.error, 'error');
+        fileInput.value = '';
+        return;
+      }
+      
+      this.selectedFile = file;
+      this.showFilePreview(file);
+      
+      // Clear file input
+      fileInput.value = '';
+    });
+  }
+  
+  // Remove file button
+  if (removeFileBtn) {
+    removeFileBtn.addEventListener('click', () => {
+      this.clearFilePreview();
+    });
+  }
+  
+  console.log('[FILE UPLOAD] Events attached');
+}
+
+showFilePreview(file) {
+  const preview = document.getElementById('file-preview');
+  const icon = document.getElementById('file-preview-icon');
+  const name = document.getElementById('file-preview-name');
+  const size = document.getElementById('file-preview-size');
+  
+  if (!preview || !icon || !name || !size) return;
+  
+  icon.innerHTML = this.fileManager.getFileIcon(file.type);
+  name.textContent = file.name;
+  size.textContent = this.fileManager.formatFileSize(file.size);
+  
+  preview.classList.remove('hidden');
+}
+
+clearFilePreview() {
+  this.selectedFile = null;
+  const preview = document.getElementById('file-preview');
+  if (preview) {
+    preview.classList.add('hidden');
+  }
+}
+
+async handleSendWithFile() {
+  const input = document.getElementById('message-input');
+  const text = input.value.trim();
+  
+  // Must have either text or file
+  if (!text && !this.selectedFile) {
+    console.log('[SEND] Nothing to send - no text and no file');
+    return;
+  }
+  
+  const conversationId = this.state.getActiveConversationId();
+  
+  // Check if we have an active conversation or need to create one
+  if (!conversationId && !this.currentUser.receiverId) {
+    this.showToast('Please select a user to chat with', 'error');
+    return;
+  }
+  
+  try {
+    // Clear input immediately for better UX
+    const textToSend = text;
+    const fileToSend = this.selectedFile;
+    input.value = '';
+    
+    // Stop typing indicator
+    if (conversationId) {
+      this.chatService.sendTypingIndicator(
+        conversationId,
+        this.currentUser.receiverId,
+        false
+      );
+    }
+    
+    // Handle editing existing message (text only, no file support for edits)
+    if (this.editingMessage) {
+      console.log('[SEND] Editing message:', this.editingMessage.messageId);
+      
+      const messages = this.state.getMessages(conversationId);
+      const message = messages.find(m => 
+        m.id === this.editingMessage.messageId || 
+        m.clientTempId === this.editingMessage.messageId
+      );
+      
+      if (message) {
+        message.content = textToSend;
+        message.isEdited = true;
+        message.editedAt = new Date().toISOString();
+        
+        const messageElement = document.querySelector(`[data-message-id="${this.editingMessage.messageId}"]`);
+        if (messageElement) {
+          messageElement.remove();
+        }
+        this.renderMessage(message, false);
+      }
+      
+      this.cancelEdit();
+      this.showToast('Message edited');
+      return;
+    }
+    
+    // If no conversation exists, create one first
+    if (!conversationId) {
+      console.log('[SEND] Creating new conversation before sending message');
+      
+      const currentUserId = this.currentUser.userData?.id || this.currentUser.id;
+      
+      // Create conversation
+      const conversation = await this.chatService.findOrCreateJobConversation(
+        this.jobId,
+        this.currentUser.receiverId
+      );
+      
+      console.log('[SEND] Conversation created:', conversation.id);
+      
+      // Add to state
+      this.state.addConversation({
+        id: conversation.id,
+        participants: conversation.participants || [
+          { 
+            userId: currentUserId,
+            name: this.currentUser.name,
+            isOnline: true,
+            isActive: true
+          },
+          {
+            userId: this.currentUser.receiverId,
+            name: this.currentUser.receiverName,
+            isOnline: this.state.isUserOnline(this.currentUser.receiverId),
+            isActive: true
+          }
+        ],
+        metadata: conversation.metadata || {
+          jobId: this.jobId,
+          jobTitle: this.jobTitle
+        },
+        settings: conversation.settings || {},
+        lastMessage: null,
+        unreadCount: 0,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        lastActivity: conversation.updatedAt
+      });
+      
+      // Set as active
+      this.state.setActiveConversation(conversation.id);
+      
+      // Clear the messages container
+      const container = document.getElementById('messages-container');
+      container.innerHTML = '';
+      
+      // Update conversations list
+      this.renderConversations();
+      
+      console.log('[SEND] Conversation setup complete, now sending message');
+    }
+    
+    const activeConvId = this.state.getActiveConversationId();
+    const replyTo = this.replyingTo ? this.replyingTo.messageId : undefined;
+    
+    // Handle file upload
+    if (fileToSend) {
+      console.log('[SEND] Sending message with file attachment');
+      await this.sendFileMessage(activeConvId, fileToSend, textToSend);
+      this.clearFilePreview();
+    } else {
+      // Send text only
+      console.log('[SEND] Sending text-only message:', {
+        conversationId: activeConvId,
+        receiverId: this.currentUser.receiverId,
+        textLength: textToSend.length,
+        replyTo
+      });
+      
+      await this.chatService.sendTextMessage(
+        activeConvId,
+        textToSend,
+        this.currentUser.receiverId,
+        replyTo
+      );
+    }
+    
+    // Clear reply if active
+    if (this.replyingTo) {
+      this.cancelReply();
+    }
+    
+    console.log('[SEND] Message sent successfully');
+    
+  } catch (error) {
+    console.error('[SEND] Failed to send message:', error);
+    input.value = text; // Restore text on error
+    this.showToast('Failed to send message: ' + error.message, 'error');
+  }
+}
+
+
+async sendFileMessage(conversationId, file, caption = '') {
+  console.log('[FILE MESSAGE] Starting file upload:', file.name);
+  
+  const clientTempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Show upload progress
+  const progressDiv = document.getElementById('upload-progress');
+  if (progressDiv) {
+    progressDiv.classList.remove('hidden');
+  }
+  
+  try {
+    // Step 1: Upload file to server
+    const uploadedFile = await this.fileManager.uploadFile(file, (progress) => {
+      if (progressDiv) {
+        progressDiv.innerHTML = this.fileManager.renderUploadProgress(progress, file.name);
+      }
+    });
+    
+    console.log('[FILE MESSAGE] File uploaded:', uploadedFile);
+    
+    // Hide progress
+    if (progressDiv) {
+      progressDiv.classList.add('hidden');
+      progressDiv.innerHTML = '';
+    }
+    
+    // Step 2: Create optimistic message with CORRECT attachment structure
+    const optimisticMessage = {
+      id: clientTempId,
+      clientTempId: clientTempId,
+      conversationId: conversationId,
+      senderId: this.currentUser.userData?.id || this.currentUser.id,
+      receiverId: this.currentUser.receiverId,
+      content: caption || '',
+      contentText: caption || '',
+      attachments: [{
+        // ✅ Use the EXACT fields from server response
+        url: uploadedFile.url || uploadedFile.path,
+        filename: uploadedFile.filename || uploadedFile.originalName || file.name,
+        name: uploadedFile.filename || uploadedFile.originalName || file.name,
+        size: uploadedFile.size || file.size,
+        mimeType: uploadedFile.mimeType || file.type,
+        type: this.fileManager.getFileType(uploadedFile.mimeType || file.type)
+      }],
+      type: 'file',
+      status: this.MessageStatus.SENDING,
+      timestamp: new Date().toISOString(),
+      isTemporary: true
+    };
+    
+    console.log('[FILE MESSAGE] Optimistic message created:', {
+      id: optimisticMessage.id,
+      attachments: optimisticMessage.attachments
+    });
+    
+    // Step 3: Add to UI immediately
+    this.state.addMessage(conversationId, optimisticMessage);
+    this.renderMessage(optimisticMessage, true);
+    
+    // Update conversation
+    this.state.updateConversation(conversationId, {
+      lastMessage: optimisticMessage,
+      lastActivity: optimisticMessage.timestamp
+    });
+    this.renderConversations();
+    
+    // Step 4: Send to server via chatService
+    await this.chatService.sendFileMessage(
+      conversationId,
+      uploadedFile.url || uploadedFile.path,
+      uploadedFile.filename || uploadedFile.originalName || file.name,
+      uploadedFile.size || file.size,
+      uploadedFile.mimeType || file.type,
+      this.currentUser.receiverId,
+      caption,
+      this.replyingTo?.messageId,
+      clientTempId
+    );
+    
+    console.log('[FILE MESSAGE] Message sent to server successfully');
+    
+  } catch (error) {
+    console.error('[FILE MESSAGE] Failed:', error);
+    
+    // Hide progress
+    if (progressDiv) {
+      progressDiv.classList.add('hidden');
+      progressDiv.innerHTML = '';
+    }
+    
+    // Mark message as failed
+    if (clientTempId) {
+      this.state.updateMessageStatus(conversationId, clientTempId, this.MessageStatus.FAILED);
+      
+      // Re-render the failed message
+      const messages = this.state.getMessages(conversationId);
+      const failedMessage = messages.find(m => m.clientTempId === clientTempId);
+      if (failedMessage) {
+        const messageElement = document.querySelector(`[data-message-id="${clientTempId}"]`);
+        if (messageElement) {
+          messageElement.remove();
+        }
+        this.renderMessage(failedMessage, false);
+      }
+    }
+    
+    throw error;
+  }
+}
+
+
+
 // Also update the setupResponsivePanels method - remove ALL text content changes:
 
 
@@ -2269,10 +2976,18 @@ setupResponsivePanels() {
   // PHASE 3.1 + 3.2: ENHANCED MESSAGE DISPLAY
   // ==========================================
 
+
+  // ==========================================
+// ENHANCED MESSAGE RENDERING WITH FILE ATTACHMENTS
+// ==========================================
+
 renderMessage(message, animate = true) {
   const container = document.getElementById('messages-container');
   const isMine = message.senderId === this.currentUser.userData?.id || message.senderId === this.currentUser.id;
   
+  // ==========================================
+  // MESSAGE GROUPING LOGIC
+  // ==========================================
   const messages = Array.from(container.children).filter(el => el.classList.contains('message-wrapper'));
   const lastMessage = messages[messages.length - 1];
   
@@ -2281,9 +2996,12 @@ renderMessage(message, animate = true) {
     const prevSenderId = lastMessage.dataset.senderId;
     const prevTimestamp = lastMessage.dataset.timestamp;
     const timeDiff = new Date(message.timestamp).getTime() - new Date(prevTimestamp).getTime();
-    shouldGroup = prevSenderId === message.senderId && timeDiff < 300000;
+    shouldGroup = prevSenderId === message.senderId && timeDiff < 300000; // 5 minutes
   }
   
+  // ==========================================
+  // DATE SEPARATOR
+  // ==========================================
   const needsDateSeparator = this.needsDateSeparator(container, message.timestamp);
   
   if (needsDateSeparator) {
@@ -2291,6 +3009,9 @@ renderMessage(message, animate = true) {
     container.appendChild(separator);
   }
   
+  // ==========================================
+  // CREATE MESSAGE WRAPPER
+  // ==========================================
   const messageDiv = document.createElement('div');
   messageDiv.className = `message-wrapper ${shouldGroup ? 'mb-1' : 'mb-4'}`;
   messageDiv.dataset.messageId = message.id || message.clientTempId;
@@ -2301,11 +3022,16 @@ renderMessage(message, animate = true) {
     messageDiv.style.animation = 'none';
   }
   
+  // ==========================================
+  // MESSAGE METADATA
+  // ==========================================
   const statusIcon = this.getEnhancedStatusIcon(message.status);
   const canEdit = isMine && this.canEditMessage(message);
   const canDelete = isMine;
   
-  // ✅ FIXED: Extract text content properly
+  // ==========================================
+  // EXTRACT TEXT CONTENT (handles multiple formats)
+  // ==========================================
   let messageContent = '';
   if (typeof message.content === 'string') {
     messageContent = message.content;
@@ -2314,14 +3040,17 @@ renderMessage(message, animate = true) {
   } else if (message.content && typeof message.content.text === 'string') {
     messageContent = message.content.text;
   } else if (message.content && typeof message.content === 'object') {
-    messageContent = message.content.contentText || JSON.stringify(message.content);
-  } else {
-    messageContent = 'No content';
+    messageContent = message.content.contentText || '';
   }
   
+  // ==========================================
+  // BUILD MESSAGE HTML
+  // ==========================================
   messageDiv.innerHTML = `
     <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
       <div class="flex gap-2 max-w-[70%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
+        
+        <!-- AVATAR (only show if not grouped) -->
         ${!shouldGroup ? `
           <div class="flex-shrink-0">
             <div class="w-8 h-8 rounded-full bg-gradient-to-br ${
@@ -2335,13 +3064,20 @@ renderMessage(message, animate = true) {
         ` : '<div class="w-8"></div>'}
         
         <div class="flex-1 min-w-0">
+          
+          <!-- SENDER NAME (only for other users, not grouped) -->
           ${!shouldGroup && !isMine ? `
-            <div class="text-xs text-gray-500 mb-1 ml-2 font-medium">${this.escapeHtml(this.currentUser.receiverName || 'User')}</div>
+            <div class="text-xs text-gray-500 mb-1 ml-2 font-medium">
+              ${this.escapeHtml(this.currentUser.receiverName || 'User')}
+            </div>
           ` : ''}
           
+          <!-- REPLY REFERENCE -->
           ${message.replyTo ? `
             <div class="mb-1 ml-2">
-              <div class="text-xs p-2 rounded-lg bg-gray-100 border-l-2 ${isMine ? 'border-indigo-400' : 'border-purple-400'} cursor-pointer hover:bg-gray-200 transition-colors"
+              <div class="text-xs p-2 rounded-lg bg-gray-100 border-l-2 ${
+                isMine ? 'border-indigo-400' : 'border-purple-400'
+              } cursor-pointer hover:bg-gray-200 transition-colors"
                    onclick="window.chatApp.scrollToMessage('${message.replyTo}')">
                 <div class="text-gray-600 font-medium mb-0.5">↩ Replying to</div>
                 <div class="text-gray-700 truncate">${this.escapeHtml(this.getReplyPreview(message.replyTo))}</div>
@@ -2349,6 +3085,7 @@ renderMessage(message, animate = true) {
             </div>
           ` : ''}
           
+          <!-- MESSAGE BUBBLE -->
           <div class="group relative">
             <div class="message-bubble rounded-2xl px-4 py-2.5 ${
               isMine 
@@ -2356,22 +3093,37 @@ renderMessage(message, animate = true) {
                 : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
             } ${message.status === this.MessageStatus.FAILED ? 'opacity-60 border-red-300' : ''}">
               
-              <div class="break-words whitespace-pre-wrap" id="message-content-${message.id || message.clientTempId}">
-                ${this.escapeHtml(messageContent)}
-              </div>
+              <!-- TEXT CONTENT -->
+              ${messageContent ? `
+                <div class="break-words whitespace-pre-wrap" id="message-content-${message.id || message.clientTempId}">
+                  ${this.escapeHtml(messageContent)}
+                </div>
+              ` : ''}
               
+              <!-- FILE ATTACHMENTS -->
+              ${message.attachments && message.attachments.length > 0 ? `
+                <div class="${messageContent ? 'mt-2' : ''}">
+                  ${message.attachments.map(attachment => 
+                    this.fileManager.renderFileAttachment(attachment)
+                  ).join('')}
+                </div>
+              ` : ''}
+              
+              <!-- EDITED INDICATOR -->
               ${message.isEdited ? `
                 <div class="text-xs ${isMine ? 'text-indigo-200' : 'text-gray-400'} mt-1">
                   (edited)
                 </div>
               ` : ''}
               
+              <!-- TIMESTAMP & STATUS -->
               <div class="text-xs mt-1 flex items-center gap-1.5 ${isMine ? 'text-indigo-100' : 'text-gray-400'}">
                 <span>${this.formatTime(message.timestamp)}</span>
                 ${isMine ? `<span>${statusIcon}</span>` : ''}
               </div>
             </div>
             
+            <!-- RETRY BUTTON (for failed messages) -->
             ${message.status === this.MessageStatus.FAILED ? `
               <button 
                 onclick="window.chatApp.retryMessage('${message.id || message.clientTempId}')"
@@ -2384,7 +3136,10 @@ renderMessage(message, animate = true) {
               </button>
             ` : ''}
             
+            <!-- MESSAGE ACTIONS (hover menu) -->
             <div class="message-actions absolute ${isMine ? 'left-0' : 'right-0'} top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 -translate-y-8">
+              
+              <!-- REPLY BUTTON -->
               <button 
                 onclick="window.chatApp.replyToMessage('${message.id || message.clientTempId}')"
                 class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
@@ -2395,6 +3150,7 @@ renderMessage(message, animate = true) {
                 </svg>
               </button>
               
+              <!-- COPY BUTTON -->
               <button 
                 onclick="window.chatApp.copyMessage('${message.id || message.clientTempId}')"
                 class="p-1.5 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
@@ -2405,6 +3161,7 @@ renderMessage(message, animate = true) {
                 </svg>
               </button>
               
+              <!-- EDIT BUTTON (only for own messages within 15 min) -->
               ${canEdit ? `
                 <button 
                   onclick="window.chatApp.editMessage('${message.id || message.clientTempId}')"
@@ -2417,6 +3174,7 @@ renderMessage(message, animate = true) {
                 </button>
               ` : ''}
               
+              <!-- DELETE BUTTON (only for own messages) -->
               ${canDelete ? `
                 <button 
                   onclick="window.chatApp.deleteMessage('${message.id || message.clientTempId}')"
@@ -2435,10 +3193,52 @@ renderMessage(message, animate = true) {
     </div>
   `;
   
+  // ==========================================
+  // APPEND & SCROLL
+  // ==========================================
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
 }
 
+viewImage(imageUrl, filename) {
+  const modal = document.getElementById('image-viewer-modal');
+  const image = document.getElementById('viewer-image');
+  const filenameEl = document.getElementById('viewer-filename');
+  const downloadLink = document.getElementById('viewer-download');
+  
+  image.src = imageUrl;
+  image.alt = filename;
+  filenameEl.textContent = filename;
+  downloadLink.href = imageUrl;
+  downloadLink.download = filename;
+  
+  modal.classList.remove('hidden');
+  
+  // Close on escape key
+  const escapeHandler = (e) => {
+    if (e.key === 'Escape') {
+      this.closeImageViewer();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  };
+  document.addEventListener('keydown', escapeHandler);
+  
+  // Close on background click
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      this.closeImageViewer();
+    }
+  };
+}
+
+closeImageViewer() {
+  const modal = document.getElementById('image-viewer-modal');
+  modal.classList.add('hidden');
+  
+  // Clear image to save memory
+  const image = document.getElementById('viewer-image');
+  image.src = '';
+}
 
   needsDateSeparator(container, timestamp) {
     const messages = Array.from(container.children).filter(el => 

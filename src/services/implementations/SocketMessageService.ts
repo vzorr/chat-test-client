@@ -19,53 +19,59 @@ export class SocketMessageService extends BaseMessageService implements IMessage
   }
 
   async sendMessage(
-    conversationId: string, 
-    content: string, 
-    receiverId: string,
-    options?: {
-      replyTo?: string;
-      attachments?: any[];
-      metadata?: Record<string, any>;
-    }
-  ): Promise<Message> {
-    return new Promise((resolve, reject) => {
-      if (!this.socketClient.isConnected()) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      // Create message using base class method
-      const message = this.createMessage(conversationId, content, receiverId, options);
-      const clientTempId = message.clientTempId!;
-      
-      // Track message
-      this.trackMessage(clientTempId);
-
-      // Set up event listeners
-      const successHandler = this.socketClient.on('message_sent', (data: any) => {
-        if (data.clientTempId === clientTempId) {
-          this.handleMessageSent(data, message, resolve, successHandler, errorHandler);
-        }
-      });
-
-      const errorHandler = this.socketClient.on('message_send_error', (data: any) => {
-        if (data.clientTempId === clientTempId) {
-          this.handleMessageError(data, reject, successHandler, errorHandler);
-        }
-      });
-
-      // Set timeout using base class method
-      this.setMessageTimeout(clientTempId, () => {
-        this.cleanupHandlers(successHandler, errorHandler);
-        message.status = MessageStatus.FAILED;
-        this.cacheMessage(conversationId, message);
-        reject(new Error('Message send timeout'));
-      });
-
-      // Send via socket
-      this.socketClient.sendMessage(message);
-    });
+  conversationId: string, 
+  content: string, 
+  receiverId: string,
+  options?: {
+    replyTo?: string;
+    attachments?: any[];
+    metadata?: Record<string, any>;
+    clientTempId?: string;  // ✅ Accept it
   }
+): Promise<Message> {
+  return new Promise((resolve, reject) => {
+    if (!this.socketClient.isConnected()) {
+      reject(new Error('Socket not connected'));
+      return;
+    }
+
+    // Create message using base class method
+    const message = this.createMessage(conversationId, content, receiverId, options);
+    
+    // ✅ Use provided clientTempId or the one from createMessage
+    const clientTempId = options?.clientTempId || message.clientTempId!;
+    
+    // Track message
+    this.trackMessage(clientTempId);
+
+    // Set up event listeners
+    const successHandler = this.socketClient.on('message_sent', (data: any) => {
+      if (data.clientTempId === clientTempId) {
+        this.handleMessageSent(data, message, resolve, successHandler, errorHandler);
+      }
+    });
+
+    const errorHandler = this.socketClient.on('message_send_error', (data: any) => {
+      if (data.clientTempId === clientTempId) {
+        this.handleMessageError(data, reject, successHandler, errorHandler);
+      }
+    });
+
+    // Set timeout using base class method
+    this.setMessageTimeout(clientTempId, () => {
+      this.cleanupHandlers(successHandler, errorHandler);
+      message.status = MessageStatus.FAILED;
+      this.cacheMessage(conversationId, message);
+      reject(new Error('Message send timeout'));
+    });
+
+    // ✅ Send via socket with clientTempId
+    this.socketClient.sendMessage({
+      ...message,
+      clientTempId: clientTempId  // ✅ Ensure it's included
+    });
+  });
+}
 
   async sendAttachment(
     conversationId: string,
