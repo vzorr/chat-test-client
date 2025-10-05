@@ -1626,6 +1626,7 @@ async startConversationWithUser(user) {
 }
 
 
+
 async selectConversation(conversationId) {
   console.log('============================================');
   console.log('[CONVERSATION] selectConversation CALLED');
@@ -1717,39 +1718,87 @@ async selectConversation(conversationId) {
     
     console.log(`[CONVERSATION] Loaded ${data.messages.length} messages from server`);
     
-    // Clear existing messages
+    // ==========================================
+    // NORMALIZE MESSAGES FROM SERVER
+    // ==========================================
+    console.log('[CONVERSATION] ===== NORMALIZING SERVER MESSAGES =====');
     this.state.clearMessages(conversationId);
     console.log('[CONVERSATION] Cleared existing messages from state');
     
-    // Add new messages
     data.messages.forEach((msg, index) => {
-      // Fixed logging - handle content properly
-      let contentPreview = 'No content';
-      if (typeof msg.content === 'string') {
-        contentPreview = msg.content.substring(0, 50);
-      } else if (typeof msg.contentText === 'string') {
-        contentPreview = msg.contentText.substring(0, 50);
-      } else if (msg.content) {
-        contentPreview = JSON.stringify(msg.content).substring(0, 50);
+      console.log(`\n[CONVERSATION] Processing message ${index + 1}/${data.messages.length}`);
+      console.log(`[CONVERSATION] Message ${index + 1} BEFORE normalization:`, {
+        id: msg.id,
+        type: msg.type,
+        hasTopLevelAttachments: !!msg.attachments,
+        hasContentObject: typeof msg.content === 'object',
+        hasContentAttachments: !!msg.content?.attachments,
+        contentAttachmentsCount: msg.content?.attachments?.length || 0
+      });
+      
+      // Normalize message structure
+      if (msg.content && typeof msg.content === 'object') {
+        // Extract attachments from content.attachments to top level
+        if (Array.isArray(msg.content.attachments) && msg.content.attachments.length > 0) {
+          msg.attachments = msg.content.attachments.map(att => {
+            const normalized = {
+              url: att.url,
+              filename: att.name,
+              name: att.name,
+              size: parseInt(att.size) || 0,  // Convert string to number
+              mimeType: att.mimeType,
+              type: this.fileManager.getFileType(att.mimeType)
+            };
+            
+            console.log(`[CONVERSATION] Normalized attachment:`, normalized);
+            return normalized;
+          });
+          
+          console.log(`[CONVERSATION] ✅ Extracted ${msg.attachments.length} attachments from content`);
+        } else {
+          msg.attachments = [];
+        }
+        
+        // Extract text content
+        const textContent = msg.content.text || '';
+        msg.contentText = textContent;
+        
+        // Flatten content to string for rendering
+        msg.content = textContent;
+      } else {
+        // Content is already a string or missing
+        msg.attachments = msg.attachments || [];
+        msg.content = msg.content || '';
       }
       
-      console.log(`[CONVERSATION] Adding message ${index + 1}/${data.messages.length}:`, {
+      console.log(`[CONVERSATION] Message ${index + 1} AFTER normalization:`, {
         id: msg.id,
-        senderId: msg.senderId,
-        content: contentPreview,
-        timestamp: msg.timestamp || msg.createdAt
+        type: msg.type,
+        content: msg.content.substring(0, 50),
+        attachments: msg.attachments?.length || 0,
+        hasAttachments: msg.attachments && msg.attachments.length > 0
       });
       
       this.state.addMessage(conversationId, msg);
     });
+    
+    console.log('[CONVERSATION] ===== NORMALIZATION COMPLETE =====\n');
     
     // Get messages from state
     const messages = this.state.getMessages(conversationId);
     console.log(`[CONVERSATION] Messages now in state:`, messages.length);
     
     if (messages.length > 0) {
-      console.log('[CONVERSATION] First message:', messages[0]);
-      console.log('[CONVERSATION] Last message:', messages[messages.length - 1]);
+      console.log('[CONVERSATION] First message:', {
+        id: messages[0].id,
+        content: messages[0].content.substring(0, 30),
+        hasAttachments: !!messages[0].attachments?.length
+      });
+      console.log('[CONVERSATION] Last message:', {
+        id: messages[messages.length - 1].id,
+        content: messages[messages.length - 1].content.substring(0, 30),
+        hasAttachments: !!messages[messages.length - 1].attachments?.length
+      });
     }
     
     // Render messages
@@ -1775,7 +1824,10 @@ async selectConversation(conversationId) {
       messages.forEach((msg, index) => {
         console.log(`[CONVERSATION] Calling renderMessage for message ${index + 1}:`, {
           id: msg.id,
-          senderId: msg.senderId
+          senderId: msg.senderId,
+          hasContent: !!msg.content,
+          hasAttachments: msg.attachments && msg.attachments.length > 0,
+          attachmentCount: msg.attachments?.length || 0
         });
         
         this.renderMessage(msg, false);
@@ -1825,6 +1877,8 @@ async selectConversation(conversationId) {
     `;
   }
 }
+
+
 
 
 async testLoadMessages(conversationId) {
@@ -2855,9 +2909,15 @@ async handleSendWithFile() {
 
 
 async sendFileMessage(conversationId, file, caption = '') {
-  console.log('[FILE MESSAGE] Starting file upload:', file.name);
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('[FILE MESSAGE] Starting file upload process');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('[FILE MESSAGE] File:', file.name);
+  console.log('[FILE MESSAGE] Size:', this.fileManager.formatFileSize(file.size));
+  console.log('[FILE MESSAGE] Type:', file.type);
   
   const clientTempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log('[FILE MESSAGE] Client Temp ID:', clientTempId);
   
   // Show upload progress
   const progressDiv = document.getElementById('upload-progress');
@@ -2866,14 +2926,37 @@ async sendFileMessage(conversationId, file, caption = '') {
   }
   
   try {
-    // Step 1: Upload file to server
-    const uploadedFile = await this.fileManager.uploadFile(file, (progress) => {
+    // ==========================================
+    // STEP 1: UPLOAD FILE (Wait for completion)
+    // ==========================================
+    console.log('[FILE MESSAGE] STEP 1: Uploading to storage...');
+    
+    const uploadedFile = await this.fileManager.uploadFile(file, (progressData) => {
       if (progressDiv) {
-        progressDiv.innerHTML = this.fileManager.renderUploadProgress(progress, file.name);
+        const progress = progressData.percent || progressData;
+        progressDiv.innerHTML = this.fileManager.renderUploadProgress(
+          progress, 
+          file.name,
+          progressData
+        );
       }
     });
     
-    console.log('[FILE MESSAGE] File uploaded:', uploadedFile);
+    console.log('[FILE MESSAGE] ✅ Upload complete');
+    console.log('[FILE MESSAGE] Uploaded file data:', {
+      url: uploadedFile.url,
+      filename: uploadedFile.filename,
+      size: uploadedFile.size,
+      mimeType: uploadedFile.mimeType
+    });
+    
+    // Validate upload response
+    if (!uploadedFile.url) {
+      throw new Error('Upload response missing URL');
+    }
+    if (!uploadedFile.size && !file.size) {
+      throw new Error('Upload response missing file size');
+    }
     
     // Hide progress
     if (progressDiv) {
@@ -2881,50 +2964,14 @@ async sendFileMessage(conversationId, file, caption = '') {
       progressDiv.innerHTML = '';
     }
     
-    // Step 2: Create optimistic message with CORRECT attachment structure
-    const optimisticMessage = {
-      id: clientTempId,
-      clientTempId: clientTempId,
-      conversationId: conversationId,
-      senderId: this.currentUser.userData?.id || this.currentUser.id,
-      receiverId: this.currentUser.receiverId,
-      content: caption || '',
-      contentText: caption || '',
-      attachments: [{
-        // ✅ Use the EXACT fields from server response
-        url: uploadedFile.url || uploadedFile.path,
-        filename: uploadedFile.filename || uploadedFile.originalName || file.name,
-        name: uploadedFile.filename || uploadedFile.originalName || file.name,
-        size: uploadedFile.size || file.size,
-        mimeType: uploadedFile.mimeType || file.type,
-        type: this.fileManager.getFileType(uploadedFile.mimeType || file.type)
-      }],
-      type: 'file',
-      status: this.MessageStatus.SENDING,
-      timestamp: new Date().toISOString(),
-      isTemporary: true
-    };
+    // ==========================================
+    // STEP 2: SEND MESSAGE TO SERVER
+    // ==========================================
+    console.log('[FILE MESSAGE] STEP 2: Sending message to server...');
     
-    console.log('[FILE MESSAGE] Optimistic message created:', {
-      id: optimisticMessage.id,
-      attachments: optimisticMessage.attachments
-    });
-    
-    // Step 3: Add to UI immediately
-    this.state.addMessage(conversationId, optimisticMessage);
-    this.renderMessage(optimisticMessage, true);
-    
-    // Update conversation
-    this.state.updateConversation(conversationId, {
-      lastMessage: optimisticMessage,
-      lastActivity: optimisticMessage.timestamp
-    });
-    this.renderConversations();
-    
-    // Step 4: Send to server via chatService
-    await this.chatService.sendFileMessage(
+    const serverMessage = await this.chatService.sendFileMessage(
       conversationId,
-      uploadedFile.url || uploadedFile.path,
+      uploadedFile.url,
       uploadedFile.filename || uploadedFile.originalName || file.name,
       uploadedFile.size || file.size,
       uploadedFile.mimeType || file.type,
@@ -2934,10 +2981,61 @@ async sendFileMessage(conversationId, file, caption = '') {
       clientTempId
     );
     
-    console.log('[FILE MESSAGE] Message sent to server successfully');
+    console.log('[FILE MESSAGE] ✅ Server confirmed message');
+    console.log('[FILE MESSAGE] Server response:', serverMessage);
+    
+    // ==========================================
+    // STEP 3: CREATE FINAL MESSAGE FOR UI
+    // ==========================================
+    console.log('[FILE MESSAGE] STEP 3: Creating final message...');
+    
+    const finalMessage = {
+      ...serverMessage,
+      content: caption || '',
+      contentText: caption || '',
+      attachments: [{
+        url: uploadedFile.url,
+        filename: uploadedFile.filename || uploadedFile.originalName || file.name,
+        name: uploadedFile.filename || uploadedFile.originalName || file.name,
+        size: uploadedFile.size || file.size,
+        mimeType: uploadedFile.mimeType || file.type,
+        type: this.fileManager.getFileType(uploadedFile.mimeType || file.type)
+      }]
+    };
+    
+    console.log('[FILE MESSAGE] Final message:', {
+      id: finalMessage.id,
+      clientTempId: finalMessage.clientTempId,
+      hasAttachments: !!finalMessage.attachments?.length,
+      attachmentSize: finalMessage.attachments[0].size,
+      attachmentUrl: finalMessage.attachments[0].url
+    });
+    
+    // ==========================================
+    // STEP 4: ADD TO UI
+    // ==========================================
+    console.log('[FILE MESSAGE] STEP 4: Adding to UI...');
+    
+    this.state.addMessage(conversationId, finalMessage);
+    this.renderMessage(finalMessage, true);
+    
+    // Update conversation
+    this.state.updateConversation(conversationId, {
+      lastMessage: finalMessage,
+      lastActivity: finalMessage.timestamp
+    });
+    this.renderConversations();
+    
+    console.log('[FILE MESSAGE] ✅ COMPLETE');
+    console.log('═══════════════════════════════════════════════════════\n');
     
   } catch (error) {
-    console.error('[FILE MESSAGE] Failed:', error);
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('[FILE MESSAGE] ❌ ERROR');
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('[FILE MESSAGE] Error:', error.message);
+    console.error('[FILE MESSAGE] Stack:', error.stack);
+    console.error('═══════════════════════════════════════════════════════\n');
     
     // Hide progress
     if (progressDiv) {
@@ -2945,22 +3043,7 @@ async sendFileMessage(conversationId, file, caption = '') {
       progressDiv.innerHTML = '';
     }
     
-    // Mark message as failed
-    if (clientTempId) {
-      this.state.updateMessageStatus(conversationId, clientTempId, this.MessageStatus.FAILED);
-      
-      // Re-render the failed message
-      const messages = this.state.getMessages(conversationId);
-      const failedMessage = messages.find(m => m.clientTempId === clientTempId);
-      if (failedMessage) {
-        const messageElement = document.querySelector(`[data-message-id="${clientTempId}"]`);
-        if (messageElement) {
-          messageElement.remove();
-        }
-        this.renderMessage(failedMessage, false);
-      }
-    }
-    
+    this.showToast('Failed to send file: ' + error.message, 'error');
     throw error;
   }
 }
